@@ -3,74 +3,99 @@ import numbers
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import sklearn.base
-import sklearn.inspection
-
-# from actedu import utils, config
-# import seaborn as sns
-# from sklearn.cluster import SpectralClustering
 
 # default image type to use for figures TODO delete dependence on this
 IMAGE_TYPE = "png"
 
 
-def plot_pdp(dep,color="blue"):
-    """Plot the partial dependence given a dependency object"""
+def numpy2d_to_dataframe_with_types(X, columns, types):
+    """
+    Create a new dataframe with the specified column names and column types.
+
+    Example
+    X = pd.DataFrame(...)
+    values = X.values
+    df_columns = X.columns
+    df_types = X.dtypes
+
+    Xnew = numpy2d_to_dataframe_with_types(values,df_columns,df_types)
+
+    """
+    nxcols, ncols, ntypes = X.shape[1], len(columns), len(types)
+    assert nxcols == ncols == ntypes, \
+        f"with of array, len(columns) and len(types) much match, " \
+        f"got {nxcols},{ncols},{ntypes}"
+    d = {}
+    for j, c in enumerate(columns):
+        ctype = types[c]
+        d[c] = X[:, j].astype(ctype)
+    return pd.DataFrame(d)
+
+
+def plot_pdp(dep, color="blue"):
+    """Plot the partial dependence given a dependency object."""
     fig = plot_partial_dependence_with_uncertainty(
                             dep.grid, dep.predictions, dep.feature_name,
                             density=dep.density,
                             categorical=dep.categorical,
-                            mode='multiple-pd-lines',
+                            mode="multiple-pd-lines",
                             color=color,
                             alpha=0.1,
     )
     return fig
 
 
-def joint_pdp_plot(dependencies,
-                   title=None,colors=None, 
-                   outdir = None, norm=True, mode='multiple-pd-lines',
-                   sort = False,
-                   rotate_axes=False
-                  ):
+def joint_pdp_plot(
+    dependencies,
+    title=None,
+    colors=None,
+    outdir=None,
+    norm=True,
+    mode="multiple-pd-lines",
+    sort=False,
+    rotate_axes=False
+):
     """
     Plot multiple partial dependence curves on the same figure.
-    
+
     Parameters
     ----------
     dependencies: [(pdp_object,label)]
-        A list of partial dependence objects with the corresponding label to use in the legend.
-        
+        A list of partial dependence objects with the corresponding label to
+        use in the legend.
+
     title: (optional) str
         The title for the figure
-    
+
     colors: (optional) [str|rbg|hex]
         The colors to use for each partial dependence curve
-    
+
     outdir: (optional) str
         The directory to save the figure to
-    
+
     norm: (optional) bool
         Whether or not to scale all the curves so they have the same mean.
-        
+
     sort: (optional) bool
-        Should the x values for the partial dependence curve be sorted by the average partial dependence?
-        False by default. Applies only to categorical variables.
-        
+        Should the x values for the partial dependence curve be sorted by the
+        average partial dependence? False by default. Applies only to
+        categorical variables.
+
     rotate_axes: (optional) bool
         Should the x axis labels be rotated. False by default.
-    
+
     """
-    assert len(dependencies) > 0, 'Must supply at least one dependence object'
+    assert len(dependencies) > 0, "Must supply at least one dependence object"
     if colors is None:
-        colors = plt.cm.rainbow(np.linspace(0,1,len(dependencies)))
+        colors = plt.cm.rainbow(np.linspace(0, 1, len(dependencies)))
 
     order = None
     if sort:
         mu = []
         grid = None
-        for pdp,_ in dependencies:
-            assert pdp.categorical, "Only categorical partial dependence can be sorted by value"
+        for pdp, in dependencies:
+            assert pdp.categorical, "Only categorical partial dependence can" \
+                " be sorted by value"
             if grid is None:
                 grid = pdp.grid
             else:
@@ -139,27 +164,6 @@ def norm_predictions(predictions):
     for p in predictions:
         result.append(p - p.mean())
     return result
-
-
-def post_transform_permutation_importance(transformer, predictor, 
-                                          X, y, n_jobs=1, n_repeats=5,random_state=123,scoring="r2"):
-    """Returns the permutation importance of transformed columns."""
-    Xt = transformer.transform(X.copy())
-    importance = sklearn.inspection.permutation_importance(
-        predictor,
-        Xt, y, 
-        n_jobs=n_jobs,
-        n_repeats=n_repeats,
-        random_state=random_state,
-        scoring = scoring
-    )
-
-    if hasattr(Xt,"columns"):
-        columns = Xt.columns
-    else:
-        columns = ["X"+str(i) for i in range(Xt.shape[1])]
-    
-    return importance, columns
 
 
 def conditional_treatment_effect(X, feature,treatment_effect,grid_values = 20):
@@ -293,19 +297,6 @@ def construct_grid(grid_values, v, auto_threshold=20):
      
     return grid, grid_counts
     
-
-def permutation_importance_causal(model, X, **kwards):
-    """
-    Estimate how much each feature impacts causal effect predictions.
-    
-    This code wraps sklearn.inspection.purmutation importance.
-    As we do not have access to the true causal effect, we are measuring how much
-    the predictions change with respect to some metric, not how much the true performance changes.
-    
-    """
-    model = EconMLModel2Sklearn(model)
-    y_baseline = model.predict(X) # prediction with all features unshuffled
-    return sklearn.inspection.permutation_importance(model,X,y_baseline,**kwards)
 
 def _ice_and_pd(model, X, feature, grid_values, n_samples, predict_method):
     """common to both categorical and continuous pd plots."""

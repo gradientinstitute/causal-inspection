@@ -69,7 +69,6 @@ setup(
     ],
     extras_require={
         'dev': [
-            'jedi',
             'pytest',
             'pytest-flake8',
             'pytest-mock',
