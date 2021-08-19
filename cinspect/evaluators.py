@@ -1,4 +1,4 @@
-"""Result collector classes."""
+"""Result evaluator classes."""
 
 import pickle
 import numpy as np
@@ -6,35 +6,45 @@ from os.path import join
 from collections import defaultdict
 import pandas as pd
 import collections
-from cinspect import dependence
+import matplotlib.pyplot as plt
+from cinspect import dependence, importance
 from sklearn.base import clone
+from sklearn.metrics import get_scorer
+
+# default image type to use for figures TODO delete dependence on this
+IMAGE_TYPE = "png"
+
+# TODO: Make aggregate functions store results internally, and not save
+# anything. If we want to save, we should have a separate save method, and not
+# produce side-effects.
 
 
-class Collector:
-    """Abstract class for Collectors to inherit from."""
+class Evaluator:
+    """Abstract class for Evaluators to inherit from."""
 
-    def prepare(self, estimator, X_all, y_all=None, scorer=None, random_state=None):
+    def prepare(self, estimator, X, y=None, random_state=None):
         """Called before estimator is fit, and passed all data to allow unique values etc to be identified."""
         pass
 
-    def collect(self, estimator, X=None, y=None):
+    def evaluate_test(self, estimator, X=None, y=None):
         """Called on test data and passed already fit estimator."""
         pass
 
-    def collect_train(self, estimator, Xt, yt):
+    def evaluate_train(self, estimator, X, y):
         """Called on train data and passed already fit estimator."""
         pass
 
-    def collect_all(self, estimator, X, y=None):
+    def evaluate_all(self, estimator, X, y=None):
         "Called on all data and passed already fit estimator."""
         pass
 
-    def aggregate_and_plot(self, name=None, estimator_score=None, outdir=None):
-        """Called after all cv stages/collect-calls have finished."""
+    # TODO: See above
+    def aggregate(self, name=None, estimator_score=None, outdir=None):
+        """Called after all cv stages/evaluate-calls have finished."""
         pass
 
 
-class ScoreCollector(Collector):
+class ScoreEvaluator(Evaluator):
     def __init__(self, name, scorers, groupby=None):
         """
         name: str
@@ -55,31 +65,31 @@ class ScoreCollector(Collector):
         self.groupby = groupby
         self.scores = defaultdict(list)
         
-    def collect(self,estimator,X=None,y=None):
+    def evaluate_test(self, estimator, X, y):
         if self.groupby is not None:
             groups = X.groupby(self.groupby)
             for group_key, Xs in groups:
                 ys = y[Xs.index]
                 self.scores["group"].append(group_key)
-                for s_name,s in self.scorers.items():
-                    self.scores[s_name].append(s(estimator,Xs,ys))
+                for s_name, s in self.scorers.items():
+                    self.scores[s_name].append(s(estimator, Xs, ys))
                     
         else:
-            for s_name,s in self.scorers.items():
-                self.scores[s_name].append(s(estimator,X,y))
+            for s_name, s in self.scorers.items():
+                self.scores[s_name].append(s(estimator, X, y))
                 
-    def aggregate_and_plot(self, name=None, estimator_score=None, outdir=None):
+    def aggregate(self, name=None, estimator_score=None, outdir=None):
         self.scores = pd.DataFrame(self.scores)
         if self.groupby:
-            display(self.scores.groupby("group").agg(["mean","std"]))  
+            display(self.scores.groupby("group").agg(["mean","std"]))
         else:
             display(self.scores.agg(["mean","std"]))
         if outdir is not None:
-             fpath = join(outdir,f"SCORES_{self.name}.csv")
-             self.scores.to_csv(fpath)
+            fpath = join(outdir, f"SCORES_{self.name}.csv")
+            self.scores.to_csv(fpath)
                 
             
-class EffectWeightCollector(Collector):
+class EffectWeightEvaluator(Evaluator):
     """
     Collect the effect weights from a linear model.
     """
@@ -97,7 +107,7 @@ class EffectWeightCollector(Collector):
         self.property_index = property_index
         self.model_name = model_name
 
-    def collect_train(self, estimator, X=None, y=None):
+    def evaluate_train(self, estimator, X, y):
         param = getattr(estimator[-1], self.property_name)
         sy = np.std(y, ddof=1)
         if self.property_index is not None:
@@ -106,7 +116,7 @@ class EffectWeightCollector(Collector):
         self.sparams.append(param / sy)
         self.stdys.append(sy)
 
-    def aggregate_and_plot(self, name=None, estimator_score=None, outdir=None):
+    def aggregate(self, name=None, estimator_score=None, outdir=None):
         param_mean = np.mean(self.params, axis=0)
         param_ste = np.std(self.params, axis=0, ddof=1)
         sparam_mean = np.mean(self.sparams, axis=0)
@@ -129,14 +139,14 @@ class EffectWeightCollector(Collector):
                 f.write(pstr)
 
 
-# moved out of PDCollector to allow pickling
+# moved out of PDEvaluator to allow pickling
 Dependance = collections.namedtuple(
             "dependency",
             "valid feature_name grid density categorical predictions"
 )
 
 
-class PartialDependanceCollector(Collector):
+class PartialDependanceEvaluator(Evaluator):
     
     def __init__(
         self,
@@ -145,16 +155,15 @@ class PartialDependanceCollector(Collector):
         feature_grids=None,
         conditional_filter=None,
         filter_name=None,
-        pickle_name = None,
-        collect_mode="all",
-        color = "black",
-        color_samples = "grey",
-        pd_alpha = None
-        
+        pickle_name=None,
+        evaluate_mode="all",
+        color="black",
+        color_samples="grey",
+        pd_alpha=None
     ):
         """
         Parameters
-        ------------
+        ----------
         mode: str
             The mode for the plots
             
@@ -175,43 +184,42 @@ class PartialDependanceCollector(Collector):
             If set, data will be saved to a pickle file with this name.
             
         """
-        
         self.mode = mode
         self.end_transform_indx = end_transform_indx
         self.feature_grids = feature_grids  # optional map from feature_name to grid for that feature.
         self.conditional_filter = conditional_filter  # callable for filtering X
         self.filter_name = filter_name
         self.pickle_name = pickle_name
-        valid_collect_modes = ['all','test','train']
-        assert collect_mode in valid_collect_modes,f"collect_mode must be in {valid_collect_modes}"
-        self.collect_mode = collect_mode
+        valid_evaluate_modes = ['all','test','train']
+        assert evaluate_mode in valid_evaluate_modes,f"evaluate_mode must be in {valid_evaluate_modes}"
+        self.evaluate_mode = evaluate_mode
         self.pd_alpha = pd_alpha
         self.color = color
         self.color_samples = color_samples
     
     
-    def prepare(self, estimator, X_all, y_all=None, scorer="r2", random_state=42):
+    def prepare(self, estimator, X, y, random_state=42):
         if self.end_transform_indx is not None:
             # we use the X, y information only to select the values over which
             # to compute dependence and to plot the density/counts for each
             # feature.
             transformer = clone(estimator[0:self.end_transform_indx])
-            X_all = transformer.fit_transform(X_all, y_all)
+            X = transformer.fit_transform(X, y)
 
         if self.conditional_filter is not None:
-            X_all = self.conditional_filter(X_all)
+            X = self.conditional_filter(X)
 
 
         dep_params = {}
 
         def setup_feature(feature_name, grid_values="auto"):
-            if X_all.loc[:,feature_name].isnull().all(): # The column contains no data
-                values = X_all.loc[:,feature_name].values
+            if X.loc[:,feature_name].isnull().all(): # The column contains no data
+                values = X.loc[:,feature_name].values
                 grid, density, categorical = None, None, None
                 valid = False
 
             else:
-                values = X_all.loc[:, feature_name].values
+                values = X.loc[:, feature_name].values
                 grid, counts = dependence.construct_grid(grid_values, values)
                 categorical = True if counts is not None else False
                 density = counts if categorical else values
@@ -230,24 +238,24 @@ class PartialDependanceCollector(Collector):
             for feature_name, grid_values in self.feature_grids.items():
                 setup_feature(feature_name, grid_values)
         else:
-            for feature_name in X_all.columns:
+            for feature_name in X.columns:
                 setup_feature(feature_name)
 
         self.dep_params = dep_params
 
-    def collect_all(self, estimator, X, y=None):
-        if self.collect_mode == 'all':
-            self._collect(estimator,X,y)
+    def evaluate_all(self, estimator, X, y=None):
+        if self.evaluate_mode == 'all':
+            self._evaluate(estimator,X,y)
     
-    def collect_train(self,estimator,X,y=None):
-        if self.collect_mode == 'train':
-            self._collect(estimator,X,y)
+    def evaluate_train(self,estimator,X,y=None):
+        if self.evaluate_mode == 'train':
+            self._evaluate(estimator,X,y)
         
-    def collect(self,estimator,X,y=None):
-        if self.collect_mode =='test':
-            self._collect(estimator,X,y)
+    def evaluate_test(self,estimator,X,y=None):
+        if self.evaluate_mode =='test':
+            self._evaluate(estimator,X,y)
     
-    def _collect(self, estimator, X, y=None):  # called on the fit estimator
+    def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
         if self.end_transform_indx is not None:
             transformer = estimator[0:self.end_transform_indx]
             Xt = transformer.transform(X)
@@ -293,7 +301,7 @@ class PartialDependanceCollector(Collector):
     
     #TODO -add in plotting counts for discrete ones, maybe some other approximation of the distribution for others
     # TODO fix the labels for continuous (too many currently). 
-    def aggregate_and_plot(self, name=None, estimator_score=None, outdir=None):
+    def aggregate(self, name=None, estimator_score=None, outdir=None):
         if outdir is not None and self.pickle_name is not None:
             self.pickle(outdir)
         
@@ -321,9 +329,11 @@ class PartialDependanceCollector(Collector):
                 print(f"Feature {dep.feature_name} is all nan, nothing to plot.")
 
 
-class PermutationImportanceCollector(Collector):
+class PermutationImportanceEvaluator(Evaluator):
     """ """
-    def __init__(self, n_repeats=10, ntop=10,features=None,end_transform_indx=None,grouped=False, name=None):
+    def __init__(self, n_repeats=10,
+                 ntop=10,features=None,end_transform_indx=None,grouped=False,
+                 name=None, scorer="r2"):
         """
 
         Parameters
@@ -366,18 +376,18 @@ class PermutationImportanceCollector(Collector):
         self.end_transform_indx = end_transform_indx
         self.grouped = grouped
         self.name = name 
+        self.scorer = scorer
 
     def prepare(
             self,
             estimator,
-            X_all,
-            y_all=None,
-            scorer="r2",
+            X,
+            y=None,
             random_state=42
     ):
         if self.end_transform_indx is not None:
             transformer = clone(estimator[0:self.end_transform_indx])
-            X_all = transformer.fit_transform(X_all, y_all)
+            X = transformer.fit_transform(X, y)
 
         if self.grouped:
             self.columns = list(self.features.keys())
@@ -386,7 +396,7 @@ class PermutationImportanceCollector(Collector):
                 self.col_by_name = False
             elif all((type(c)==str for cols in self.features.values() for c in cols)):
                 self.feature_indices = {
-                    group_key: utils.get_column_indices_and_names(X_all,columns)[0]
+                    group_key: get_column_indices_and_names(X_all,columns)[0]
                     for (group_key,columns) in self.features.items()
                 }
                 self.col_by_name=True
@@ -395,13 +405,12 @@ class PermutationImportanceCollector(Collector):
                 
         else:
             self.feature_indices, self.columns, self.col_by_name = \
-                utils.get_column_indices_and_names(X_all, self.features)
+                get_column_indices_and_names(X, self.features)
         
-        self.n_original_columns = X_all.shape[1]
-        self.scorer = scorer
+        self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
-    def collect(self, estimator, X, y):
+    def evaluate_test(self, estimator, X, y):
         if self.end_transform_indx is not None:
             transformer = estimator[0:self.end_transform_indx]
             Xt = transformer.transform(X)
@@ -426,15 +435,15 @@ class PermutationImportanceCollector(Collector):
                 self.n_original_columns
             )
 
-        importance = permutation_importance(
+        imprt = importance.permutation_importance(
                 predictor, Xt, y, n_jobs=1, n_repeats=self.n_repeats,
                 random_state=self.random_state, scoring=self.scorer,
                 features=feature_indices, # if grouped {str:[int]}
                 grouped = self.grouped
             )
-        self.imprt_samples.append(importance.importances)
+        self.imprt_samples.append(imprt.importances)
 
-    def aggregate_and_plot(self, name=None, estimator_score=None, outdir=None):
+    def aggregate(self, name=None, estimator_score=None, outdir=None):
         if name is None:
             name = self.name
         self.samples = np.hstack(self.imprt_samples)
@@ -446,83 +455,6 @@ class PermutationImportanceCollector(Collector):
         _plot_importance(self.samples, self.ntop, self.columns, title, xlabel="Permutation Importance",outdir=outdir)
 
         
-
-class PredictionCollector(Collector):
-    """
-    Collect predictions and optionally additional columns accross folds for each entity. 
-    
-    Expects X to be passed as a pd.DataFrame
-    """
-    def __init__(self,columns,collect_mode='test',collect_func = None, modify_X_func=None, name='y_hat', target_name='y'):
-        """
-        
-        Parameters
-        ----------
-        columns: list[str]
-            List of features to extract in alongside predictions.
-            
-        collect_func: (optional) function(DataFrame) -> DataFrame
-            a function (eg filter, groupby, etc) to apply to dataframe of collected predictions in each fold. 
-            
-        collect_mode: str in ['test','train','all']
-            whether to collect predictions made only on test data, training data, or all data.
-            
-        modify_X_func: (optional) function(DataFrame) -> DataFrame
-            a function that returns a modified version of X to pass to the predictor.
-                
-        """
-        self.columns = columns
-        self.pred_name = name
-        self.target_name = target_name
-        self.fold_col = "fold"
-        self.results = []
-        self.fold = 1
-        self.collect_func = collect_func
-        self.modify_X_func = modify_X_func
-        
-        valid_collect = ['train','test','all']
-        assert collect_mode in valid_collect, f'collect_mode must be one of {valid_collect}'
-        self.collect_mode = collect_mode
-        
-            
-    def prepare(self,estimator,X_all,y_all=None,scorer="r2",random_state=42):
-        pass
-        
-    def collect(self,estimator,X,y):
-        if self.collect_mode == 'test':
-            self._collect(estimator,X,y)
-        
-    def collect_train(self,estimator,X,y):
-        if self.collect_mode == 'train':
-            self._collect(estimator,X,y)
-        
-    def collect_all(self,estimator,X,y):
-        if self.collect_mode == 'all':
-            self._collect(estimator,X,y)
-     
-    def _collect(self, estimator, X, y):
-        if self.modify_X_func is not None:
-            Xt = self.modify_X_func(X.copy()) # defensive copy, just in case
-        else:
-            Xt = X
-        y_pred = estimator.predict(Xt)
-        result = X[self.columns].copy()
-        result[self.pred_name] = y_pred
-        if self.collect_func is not None:
-            result = self.collect_func(result)
-        result[self.fold_col] = self.fold
-        result[self.target_name] = y
-        self.fold +=1
-        self.results.append(result)
-        
-    def aggregate_and_plot(self, name=None, estimator_score=None, outdir=None):
-        self.results = pd.concat(self.results)
-        if outdir is not None:
-            fpath = join(outdir,"PREDICTIONS.csv")
-            print(f"saving results to:{fpath}")
-            self.results.to_csv(fpath)
-
-
 def get_column_indices_and_names(X, columns=None):
     """
     Return the indicies and names of the specified columns as a list.
@@ -568,3 +500,40 @@ def get_column_indices_and_names(X, columns=None):
     return indices, names, passed_by_name
 
 
+def _plot_importance(imprt_samples, topn, columns, title, xlabel=None,
+                     outdir=None, file_type=IMAGE_TYPE):
+    # Get topn important features on average
+    imprt_mean = np.mean(imprt_samples, axis=1)
+    if topn < 1:
+        topn = len(imprt_mean)
+    #abs so it applies to both directional importances (coefficients) and positive importances
+    order = np.abs(imprt_mean).argsort()[-topn:]
+
+    # Plot summaries - top n important features
+    fig, ax = plt.subplots(figsize=(15, 10))
+    ax.boxplot(imprt_samples[order].T, vert=False,
+               labels=np.array(columns)[order])
+    ax.set_title(f"{title} - top {topn}")
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    
+    if outdir is not None:
+        fpath = join(outdir, f"{title}.{file_type}")
+        fig.savefig(fpath, bbox_inches="tight")
+
+
+def _check_feature_indices(feature_indices, col_by_name, columns, Xt, n_expected_columns):
+
+    if col_by_name and hasattr(Xt, "columns"):
+        if not all((c in Xt.columns for c in columns)):
+            missing = set(columns).difference(Xt.columns)
+            raise ValueError(f"Specified features not found:{missing}")
+        feature_indices = [Xt.columns.get_loc(c) for c in columns]
+
+    # we are extracting features by index - the shape cannot have changed.
+    else:
+        if Xt.shape[1] != n_expected_columns:
+            raise ValueError(f"Data dimension has changed and columns are being selected by index: "
+                             f"{n_expected_columns}->{Xt.shape[1]}")
+
+    return feature_indices

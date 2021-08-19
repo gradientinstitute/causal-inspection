@@ -15,13 +15,13 @@ clean-pyc:
 	find . -name '*~' -exec rm -f {} +
 
 typecheck:
-	mypy ./inspection
+	mypy ./cinspect
 
 lint:
-	py.test --flake8 ./inspection -p no:regtest --cache-clear
+	py.test --flake8 ./cinspect -p no:regtest --cache-clear
 
 isort:
 	isort .
 
 test:
-	pytest . --cov=inspection tests/	
+	pytest . --cov=cinspect tests/	

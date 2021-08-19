@@ -1,5 +1,4 @@
-"""
-Permutation importance for estimators
+"""Permutation importance for estimators.
 
 Adapted from sklearn to allow computation for only a subset of features.
 """
@@ -8,6 +7,9 @@ from joblib import Parallel, delayed
 from sklearn.metrics import check_scoring
 from sklearn.utils import Bunch, check_array, check_random_state
 from sklearn.utils.validation import _deprecate_positional_args
+
+# default image type to use for figures TODO delete dependence on this
+IMAGE_TYPE = "png"
 
 
 def _calculate_permutation_scores(estimator, X, y, col_idx, random_state,
@@ -36,6 +38,7 @@ def _calculate_permutation_scores(estimator, X, y, col_idx, random_state,
         scores[n_round] = feature_score
 
     return scores
+
 
 def _check_feature_dict_valid(features):
     result = []

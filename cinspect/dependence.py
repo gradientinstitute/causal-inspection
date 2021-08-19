@@ -1,3 +1,4 @@
+"""Partial dependence and individual conditional expectation functions."""
 import numbers
 
 import matplotlib.pyplot as plt
