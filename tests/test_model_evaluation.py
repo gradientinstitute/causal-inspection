@@ -62,8 +62,8 @@ class _MockEvaluator(Evaluator):
 
 
 @pytest.mark.parametrize("eval_func", [eval_model, bootstrap_model])
-def test_evaluator_calls(eval_func):
-    """Test the model evaluators or being called correctly."""
+def test_eval_function_calls(eval_func):
+    """Test the model evaluator functions are being called correctly."""
     estimator = _MockEstimator()
     evaluators = [_MockEvaluator()]
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
