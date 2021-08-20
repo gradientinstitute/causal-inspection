@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from typing import Union, Optional, List
+from typing import Union, Optional, Sequence
 from sklearn.metrics import get_scorer
 from sklearn.model_selection import KFold
 from sklearn.utils import resample, check_random_state
@@ -26,11 +26,11 @@ def eval_model(
     estimator: BaseEstimator,
     X: pd.DataFrame,
     y: Union[pd.Series, pd.DataFrame],
-    evaluators: List[Evaluator],
+    evaluators: Sequence[Evaluator],
     cv: Optional[Union[int, BaseCrossValidator]] = None,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     stratify: Optional[Union[np.ndarray, pd.Series]] = None
-):
+) -> Sequence[Evaluator]:
     """
     Evaluate a model using cross validation.
 
@@ -72,59 +72,47 @@ def eval_model(
 # TODO - we have a score evaluator - do we need to also evaluate scores here??
 
 
-def bootstrap_model(estimator, X, y, evaluators, replications=100, scorer="r2",
-                    name=None, random_state=42, outdir=None):
+def bootstrap_model(
+    estimator: BaseEstimator,
+    X: pd.DataFrame,
+    y: Union[pd.DataFrame, pd.Series],
+    evaluators: Sequence[Evaluator],
+    replications: int = 100,
+    random_state: Optional[Union[int, np.random.RandomState]] = None
+) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
 
     A list of evaluators determines what statistics are computed with the
-    bootstrap samples. Only evaluate_train and evaluate_all methods are called.
-    """
-    if isinstance(scorer, str):
-        scorer = get_scorer(scorer)
-    score_samples = []
+    bootstrap samples.
 
+    The same bootstrap samples of X and y are passed to `evaluate_train`,
+    `evaluate_test` and `evaluate_all`.
+    """
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
+    random_state = check_random_state(random_state)
     for ev in evaluators:
-        ev.prepare(estimator, X, y, scorer, random_state)
+        ev.prepare(estimator, X, y, random_state=random_state)
 
-    if name is not None:
-        print(f"Bootstrapping: {name}\n")
-    else:
-        print("Bootstrapping ...")
+    LOG.info("Bootstrapping ...")
 
     # Bootstrapping loop
-    outname = "bootstrap-train-scores.csv"
-    if outdir is not None:
-        outname = f"{outdir}/{outname}"
-
-    with open(outname, "w") as out:
-        out.write(f"{name}\n")
-
     for i in range(replications):
-        print(f"Bootstrap round {i + 1}", end=" ")
-        start = time.time()
+        LOG.info(f"Bootstrap round {i + 1}")
+        # start = time.time()
         Xb, yb = resample(X, y)
         estimator.fit(Xb, yb)
-        score = scorer(estimator, Xb, yb)
-        score_samples.append(score)
         for ev in evaluators:
             ev.evaluate_train(estimator, Xb, yb)
+            ev.evaluate_test(estimator, Xb, yb)
             ev.evaluate_all(estimator, Xb, yb)
-        end = time.time()
-        print(f"train_score = {score:.4f}, time={end-start:.1f}")
+        # end = time.time()
+        # print(f"train_score = {score:.4f}, time={end-start:.1f}")
 
-        with open(outname, "a") as out:
-            out.write(f"{score}, {end-start}\n")
-
-    # score statistics
-    score_mean = np.mean(score_samples)
-    score_std = np.std(score_samples)
+    LOG.info("Bootstrapping done.")
 
     for ev in evaluators:
-        ev.aggregate_and_plot(name, score_mean, outdir=outdir)
+        ev.aggregate()
 
-    print(f"Done, score = {score_mean:.4f} ({score_std:.4f})\n")
-
-    return score_mean, score_std, evaluators
+    return evaluators
