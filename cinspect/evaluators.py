@@ -2,17 +2,15 @@
 
 # import pickle
 # import numpy as np
-from os.path import join
 from collections import defaultdict
 import pandas as pd
-# import collections
+import collections
 # import matplotlib.pyplot as plt
-# from cinspect import dependence, importance
-# from sklearn.base import clone
+# from cinspect import importance
+from cinspect import dependence
+from sklearn.base import clone
 from sklearn.metrics import get_scorer
-
-# default image type to use for figures TODO delete dependence on this
-IMAGE_TYPE = "png"
+# from sklearn.base import check_random_state
 
 # TODO: Make aggregate functions store results internally, and not save
 # anything. If we want to save, we should have a separate save method, and not
@@ -68,7 +66,7 @@ class ScoreEvaluator(Evaluator):
 
         self.groupby = groupby
         self.scores = defaultdict(list)
-        
+
     def evaluate_test(self, estimator, X, y):
         if self.groupby is not None:
             groups = X.groupby(self.groupby)
@@ -84,12 +82,8 @@ class ScoreEvaluator(Evaluator):
 
     def aggregate(self):
         self.scores = pd.DataFrame(self.scores)
-        if self.groupby:
-            display(self.scores.groupby("group").agg(["mean", "std"]))
-        else:
-            display(self.scores.agg(["mean", "std"]))
-                
-            
+
+
 # class EffectWeightEvaluator(Evaluator):
 #     """
 #     Collect the effect weights from a linear model.
@@ -140,193 +134,161 @@ class ScoreEvaluator(Evaluator):
 #                 f.write(pstr)
 
 
-#Dependance = collections.namedtuple(
-#            "dependency",
-#            "valid feature_name grid density categorical predictions"
-#)
+Dependance = collections.namedtuple(
+            "dependency",
+            "valid feature_name grid density categorical predictions"
+)
+
+class PartialDependanceEvaluator(Evaluator):
+    """ Partial dependence plot evaluator.
+
+    Parameters
+    ----------
+    mode: str
+        The mode for the plots
+
+    end_transform_indx: (optional) int
+        compute dependence with respect to this point of the pipeline onwards.
+
+    feature_grid: (optional) dict{str:grid}
+        Map from feature_name to grid of values for that feature.
+        If set, dependence will only be computed for specified features.
+
+    conditional_filter: (optional) callable
+        Used to filter X before computing dependence
+
+    filter_name: (optional) str
+        displayed on plot to provide info about filter
+    """
+
+    def __init__(
+        self,
+        mode="multiple-pd-lines",
+        end_transform_indx=None,
+        feature_grids=None,
+        conditional_filter=None,
+        filter_name=None,
+        evaluate_mode="all",
+        color="black",
+        color_samples="grey",
+        pd_alpha=None
+    ):
+        """Construct a PartialDependanceEvaluator."""
+        self.mode = mode
+        self.end_transform_indx = end_transform_indx
+        self.feature_grids = feature_grids  # optional map from feature_name to grid for that feature.
+        self.conditional_filter = conditional_filter  # callable for filtering X
+        self.filter_name = filter_name
+        valid_evaluate_modes = ["all", "test", "train"]
+        assert evaluate_mode in valid_evaluate_modes, \
+            f"evaluate_mode must be in {valid_evaluate_modes}"
+        self.evaluate_mode = evaluate_mode
+        self.pd_alpha = pd_alpha
+        self.color = color
+        self.color_samples = color_samples
 
 
-#class PartialDependanceEvaluator(Evaluator):
-    
-#    def __init__(
-#        self,
-#        mode="multiple-pd-lines",
-#        end_transform_indx=None,
-#        feature_grids=None,
-#        conditional_filter=None,
-#        filter_name=None,
-#        pickle_name=None,
-#        evaluate_mode="all",
-#        color="black",
-#        color_samples="grey",
-#        pd_alpha=None
-#    ):
-#        """
-#        Parameters
-#        ----------
-#        mode: str
-#            The mode for the plots
-            
-#        end_transform_indx: (optional) int
-#            compute dependence with respect to this point of the pipeline onwards.
-            
-#        feature_grid: (optional) dict{str:grid}
-#            Map from feature_name to grid of values for that feature. 
-#            If set, dependence will only be computed for specified features.
-            
-#        conditional_filter: (optional) callable
-#            Used to filter X before computing dependence
-            
-#        filter_name: (optional) str
-#            displayed on plot to provide info about filter
-            
-#        pickle_name: (optional) str
-#            If set, data will be saved to a pickle file with this name.
-            
-#        """
-#        self.mode = mode
-#        self.end_transform_indx = end_transform_indx
-#        self.feature_grids = feature_grids  # optional map from feature_name to grid for that feature.
-#        self.conditional_filter = conditional_filter  # callable for filtering X
-#        self.filter_name = filter_name
-#        self.pickle_name = pickle_name
-#        valid_evaluate_modes = ['all','test','train']
-#        assert evaluate_mode in valid_evaluate_modes,f"evaluate_mode must be in {valid_evaluate_modes}"
-#        self.evaluate_mode = evaluate_mode
-#        self.pd_alpha = pd_alpha
-#        self.color = color
-#        self.color_samples = color_samples
-    
-    
-#    def prepare(self, estimator, X, y, random_state=42):
-#        if self.end_transform_indx is not None:
-#            # we use the X, y information only to select the values over which
-#            # to compute dependence and to plot the density/counts for each
-#            # feature.
-#            transformer = clone(estimator[0:self.end_transform_indx])
-#            X = transformer.fit_transform(X, y)
+    def prepare(self, estimator, X, y, random_state=None):
+        # random_state = check_random_state(random_state)
+        if self.end_transform_indx is not None:
+            # we use the X, y information only to select the values over which
+            # to compute dependence and to plot the density/counts for each
+            # feature.
+            transformer = clone(estimator[0:self.end_transform_indx])
+            X = transformer.fit_transform(X, y)
 
-#        if self.conditional_filter is not None:
-#            X = self.conditional_filter(X)
+        if self.conditional_filter is not None:
+            X = self.conditional_filter(X)
 
+        dep_params = {}
 
-#        dep_params = {}
+        def setup_feature(feature_name, grid_values="auto"):
+            if X.loc[:, feature_name].isnull().all():  # The column contains no data
+                values = X.loc[:, feature_name].values
+                grid, density, categorical = None, None, None
+                valid = False
 
-#        def setup_feature(feature_name, grid_values="auto"):
-#            if X.loc[:,feature_name].isnull().all(): # The column contains no data
-#                values = X.loc[:,feature_name].values
-#                grid, density, categorical = None, None, None
-#                valid = False
+            else:
+                values = X.loc[:, feature_name].values
+                grid, counts = dependence.construct_grid(grid_values, values)
+                categorical = True if counts is not None else False
+                density = counts if categorical else values
+                valid = True
 
-#            else:
-#                values = X.loc[:, feature_name].values
-#                grid, counts = dependence.construct_grid(grid_values, values)
-#                categorical = True if counts is not None else False
-#                density = counts if categorical else values
-#                valid = True
+            dep_params[feature_name] = Dependance(
+                valid=valid,
+                feature_name=feature_name,
+                grid=grid,
+                density=density,
+                categorical=categorical,
+                predictions=[]
+            )
 
-#            dep_params[feature_name] = Dependance(
-#                valid=valid,
-#                feature_name=feature_name,
-#                grid=grid,
-#                density=density,
-#                categorical=categorical,
-#                predictions=[]
-#            )
+        if self.feature_grids is not None:
+            for feature_name, grid_values in self.feature_grids.items():
+                setup_feature(feature_name, grid_values)
+        else:
+            for feature_name in X.columns:
+                setup_feature(feature_name)
 
-#        if self.feature_grids is not None:
-#            for feature_name, grid_values in self.feature_grids.items():
-#                setup_feature(feature_name, grid_values)
-#        else:
-#            for feature_name in X.columns:
-#                setup_feature(feature_name)
+        self.dep_params = dep_params
 
-#        self.dep_params = dep_params
+    def evaluate_all(self, estimator, X, y=None):
+        if self.evaluate_mode == "all":
+            self._evaluate(estimator, X, y)
 
-#    def evaluate_all(self, estimator, X, y=None):
-#        if self.evaluate_mode == 'all':
-#            self._evaluate(estimator,X,y)
-    
-#    def evaluate_train(self,estimator,X,y=None):
-#        if self.evaluate_mode == 'train':
-#            self._evaluate(estimator,X,y)
-        
-#    def evaluate_test(self,estimator,X,y=None):
-#        if self.evaluate_mode =='test':
-#            self._evaluate(estimator,X,y)
-    
-#    def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
-#        if self.end_transform_indx is not None:
-#            transformer = estimator[0:self.end_transform_indx]
-#            Xt = transformer.transform(X)
-#            predictor = estimator[self.end_transform_indx:]
+    def evaluate_train(self, estimator, X, y=None):
+        if self.evaluate_mode == "train":
+            self._evaluate(estimator, X, y)
 
-#        else:
-#            predictor = estimator
-#            Xt = X
+    def evaluate_test(self, estimator, X, y=None):
+        if self.evaluate_mode == "test":
+            self._evaluate(estimator, X, y)
 
-#        if self.conditional_filter is not None:
-#            Xt = self.conditional_filter(Xt)
+    def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
+        if self.end_transform_indx is not None:
+            transformer = estimator[0:self.end_transform_indx]
+            Xt = transformer.transform(X)
+            predictor = estimator[self.end_transform_indx:]
 
-#        for feature_name, params in self.dep_params.items():
-#            if feature_name not in Xt.columns:
-#                raise RuntimeError(f"{feature_name} not in X!")
-#            feature_indx = Xt.columns.get_loc(feature_name)
-#            if params.valid:
-#                grid = params.grid
-#                _, ice, _ = dependence.individual_conditional_expectation(
-#                    predictor,
-#                    Xt,
-#                    feature_indx,
-#                    grid
-#                )
-#                params.predictions.append(ice)
-                
-#    def pickle(self,outdir):
-#        assert self.pickle_name is not None, "pickle_name must be specified to serialize"
-#        info = (
-#            self.mode,
-#            self.end_transform_indx,
-#            self.feature_grids,
-#            self.conditional_filter,  
-#            self.filter_name,
-#            self.pickle_name
-#        )
-#        data = self.dep_params
-#        fpath = join(outdir,f"PD_{self.pickle_name}.dpkl")
-#        with open(fpath,"wb") as f:
-#            pickle.dump({"info":info,"data":data},f)
-        
-        
-    
-#    #TODO -add in plotting counts for discrete ones, maybe some other approximation of the distribution for others
-#    # TODO fix the labels for continuous (too many currently). 
-#    def aggregate(self, name=None, estimator_score=None, outdir=None):
-#        if outdir is not None and self.pickle_name is not None:
-#            self.pickle(outdir)
-        
-#        for dep in self.dep_params.values():
-#            if dep.valid:
-#                fname = dep.feature_name
-#                if self.filter_name is not None:
-#                    fname = fname + f", filtered by: {self.filter_name}"
-#                fig = dependence.plot_partial_dependence_with_uncertainty(
-#                    dep.grid, dep.predictions, fname,
-#                    density=dep.density,
-#                    categorical=dep.categorical,
-#                    mode=self.mode,
-#                    color=self.color,
-#                    color_samples=self.color_samples,
-#                    alpha=self.pd_alpha
-#                )
-#                if outdir is not None:
-#                    title = f"partial-dependance-{fname}"
-#                    ftitle = title.replace("/", "-")
-#                    ftitle = "_".join(ftitle.split())
-#                    fpath = join(outdir, f"{ftitle}.{IMAGE_TYPE}")
-#                    fig.savefig(fpath, bbox_inches="tight")
-#            else:
-#                print(f"Feature {dep.feature_name} is all nan, nothing to plot.")
+        else:
+            predictor = estimator
+            Xt = X
+
+        if self.conditional_filter is not None:
+            Xt = self.conditional_filter(Xt)
+
+        for feature_name, params in self.dep_params.items():
+            if feature_name not in Xt.columns:
+                raise RuntimeError(f"{feature_name} not in X!")
+            feature_indx = Xt.columns.get_loc(feature_name)
+            if params.valid:
+                grid = params.grid
+                _, ice, _ = dependence.individual_conditional_expectation(
+                    predictor,
+                    Xt,
+                    feature_indx,
+                    grid
+                )
+                params.predictions.append(ice)
+
+    def aggregate(self):
+        for dep in self.dep_params.values():
+            if dep.valid:
+                fname = dep.feature_name
+                if self.filter_name is not None:
+                    fname = fname + f", filtered by: {self.filter_name}"
+                dependence.plot_partial_dependence_with_uncertainty(
+                    dep.grid, dep.predictions, fname,
+                    density=dep.density,
+                    categorical=dep.categorical,
+                    mode=self.mode,
+                    color=self.color,
+                    color_samples=self.color_samples,
+                    alpha=self.pd_alpha
+                )
+            else:
+                print(f"Feature {dep.feature_name} is all nan, nothing to plot.")
 
 
 #class PermutationImportanceEvaluator(Evaluator):
@@ -351,24 +313,24 @@ class ScoreEvaluator(Evaluator):
 #        end_transform_indx: (optional) int
 #            Set if you which to compute feature importance with respect to features after this point in the pipeline.
 #            Defaults to computing importance with respect to the whole pipeline.
-        
+
 #        grouped: bool (default=False)
 #            Should features be permuted together as groups. If True, features must be passed as a dictionary.
-        
-        
+
+
 #        """
 #        if not grouped and hasattr(features,"values"): # flatten the dict if not grouped
 #            result = []
 #            for vals in features.values():
 #                result.extend(vals)
 #            features = result
-            
+
 #        if grouped and not hasattr(features,"values"):
 #            raise ValueError("If features should be grouped they must be specified as a dictionary.")
-            
+
 #        if grouped and hasattr(features,"values"): # grouped and passed a dict
 #            features = {key:value for key,value in features.items() if len(value) > 0}
-            
+
 #        self.n_repeats = n_repeats
 #        self.imprt_samples = []
 #        self.ntop=ntop
@@ -402,11 +364,11 @@ class ScoreEvaluator(Evaluator):
 #                self.col_by_name=True
 #            else:
 #                raise ValueError("Groups of columns must either all be int or str, not a mixture.""")
-                
+
 #        else:
 #            self.feature_indices, self.columns, self.col_by_name = \
 #                get_column_indices_and_names(X, self.features)
-        
+
 #        self.n_original_columns = X.shape[1]
 #        self.random_state = random_state
 
@@ -454,7 +416,7 @@ class ScoreEvaluator(Evaluator):
 #            title = f"{name}-{title}"
 #        _plot_importance(self.samples, self.ntop, self.columns, title, xlabel="Permutation Importance",outdir=outdir)
 
-        
+
 #def get_column_indices_and_names(X, columns=None):
 #    """
 #    Return the indicies and names of the specified columns as a list.
@@ -516,7 +478,7 @@ class ScoreEvaluator(Evaluator):
 #    ax.set_title(f"{title} - top {topn}")
 #    if xlabel is not None:
 #        ax.set_xlabel(xlabel)
-    
+
 #    if outdir is not None:
 #        fpath = join(outdir, f"{title}.{file_type}")
 #        fig.savefig(fpath, bbox_inches="tight")

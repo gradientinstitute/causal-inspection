@@ -3,7 +3,7 @@ import numbers
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from typing import Union, Any, List, Optional, cast, Literal
+from typing import Union, Any, List, Tuple, Optional, cast, Literal
 
 
 # default image type to use for figures TODO delete dependence on this
@@ -15,12 +15,12 @@ class PartialDependencePlot:
     def __init__(self,
                  mode: Literal["ice", "pd", "pd_ice"] = "pd_ice",
                  ice_samples: int = 50,
-                 figsize: tuple[int, int] = (10, 8)
+                 figsize: Tuple[int, int] = (10, 8)
                  ) -> None:
         self.mode = mode
-        self.curves: list[tuple] = []
-        self.display: list[tuple] = []
-        self.densities: list[tuple] = []
+        self.curves: List[Tuple] = []
+        self.display: List[Tuple] = []
+        self.densities: List[Tuple] = []
         self.has_density: bool = False
         self.figsize = figsize
         self.ice_samples = ice_samples
@@ -37,7 +37,8 @@ class PartialDependencePlot:
                        density: Literal["hist", "bar", None] = None
                        ):
 
-        # store the color, feature_name & curve_name so we can use them for the curve and any associated densities
+        # store the color, feature_name & curve_name so we can use them for the
+        # curve and any associated densities
         self.display.append((color, feature_name, curve_name))
 
         # compute array of grid values and 2d array of predictions
@@ -342,7 +343,7 @@ def individual_conditional_expectation(model, X, feature, grid_values,
     Xi = Xi.reshape(n * rows, columns)
 
     if input_df:
-        Xi = utils.numpy2d_to_dataframe_with_types(Xi, df_columns, df_types)
+        Xi = numpy2d_to_dataframe_with_types(Xi, df_columns, df_types)
 
     pred = predict_method(Xi)
     pred = pred.reshape(n, rows)  # (n*r,) -> (n,r)

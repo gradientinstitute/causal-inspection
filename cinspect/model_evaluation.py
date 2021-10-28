@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 
 from typing import Union, Optional, Sequence
-from sklearn.metrics import get_scorer
 from sklearn.model_selection import KFold
 from sklearn.utils import resample, check_random_state
 from sklearn.base import BaseEstimator
@@ -15,11 +14,6 @@ from sklearn.model_selection import BaseCrossValidator
 from cinspect.evaluators import Evaluator
 
 LOG = logging.getLogger(__name__)
-
-# default image type to use for figures TODO delete dependence on this
-IMAGE_TYPE = "png"
-
-# TODO - make print messages use logging instead so we can control verbosity.
 
 
 def eval_model(
@@ -51,7 +45,7 @@ def eval_model(
 
     for i, (rind, sind) in enumerate(cv.split(X, stratify)):
         LOG.info(f"Validation round {i + 1}")
-        # start = time.time()
+        start = time.time()
         Xs, ys = X.iloc[sind], y.iloc[sind]  # validation data
         Xt, yt = X.iloc[rind], y.iloc[rind]
         estimator.fit(Xt, yt)  # training data
@@ -59,7 +53,8 @@ def eval_model(
             ev.evaluate_test(estimator, Xs, ys)
             ev.evaluate_train(estimator, Xt, yt)
             ev.evaluate_all(estimator, X, y)
-        # end = time.time()
+        end = time.time()
+        LOG.info(f"... iteration time {end - start:.2f}s")
 
     LOG.info("Validation done.")
 
@@ -67,9 +62,6 @@ def eval_model(
         ev.aggregate()
 
     return evaluators
-
-
-# TODO - we have a score evaluator - do we need to also evaluate scores here??
 
 
 def bootstrap_model(
@@ -100,15 +92,15 @@ def bootstrap_model(
     # Bootstrapping loop
     for i in range(replications):
         LOG.info(f"Bootstrap round {i + 1}")
-        # start = time.time()
+        start = time.time()
         Xb, yb = resample(X, y)
         estimator.fit(Xb, yb)
         for ev in evaluators:
             ev.evaluate_train(estimator, Xb, yb)
             ev.evaluate_test(estimator, Xb, yb)
             ev.evaluate_all(estimator, Xb, yb)
-        # end = time.time()
-        # print(f"train_score = {score:.4f}, time={end-start:.1f}")
+        end = time.time()
+        LOG.info(f"... iteration time {end - start:.2f}s")
 
     LOG.info("Bootstrapping done.")
 

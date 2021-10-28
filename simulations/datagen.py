@@ -4,45 +4,36 @@ import networkx as nx
 
 
 class DGPGraph():
-    """
-    A high level Interface for building Bayesian network data generating processes.
+    """A high level Interface for building Bayesian network data generating processes.
 
     Example
-    ----------
-    
-    class CF_DGP():
-    
-    def __init__(self, nx=1, n_w=30,support_size=5):
-        self.coefs_T = np.zeros(n_w)
-        self.coefs_T[0:support_size] = np.random.normal(1,1,size=support_size)
-        
-        self.coefs_Y = np.zeros(n_w)
-        self.coefs_Y[0:support_size] = np.random.uniform(0,1,size=support_size)
+    -------
+    ```
+    alpha = 0.3
+    n_x = 30
+    support_size = 5
+    coefs_T = np.zeros(n_x)
+    coefs_T[0:support_size] = np.random.normal(1, 1, size=support_size)
 
-        def fW(n):
-            n_w = 30
-            return np.random.normal(0,1,size=(n,n_w))
+    coefs_Y = np.zeros(n_x)
+    coefs_Y[0:support_size] = np.random.uniform(0, 1, size=support_size)
 
-        def fX(n):
-            n_x = 1
-            #return np.random.normal(0,1,size=(n,n_x))
-            return np.random.uniform(-1,1,size=(n,n_x))
+    def fX(n):
+        return np.random.normal(0, 1, size=(n, n_x))
 
-        def fT(W,n):
-            return W@self.coefs_T + np.random.uniform(-1,1,size=n) 
-            
-        def fY(X,W,T,n):
-            TE = np.exp(2*X[:,0])
-            return TE*T + W@self.coefs_Y + np.random.uniform(-1,1,size=n)
-    
-        dgp = DGPGraph()
-        dgp.add_node('W',fW)
-        dgp.add_node('X',fX)
-        dgp.add_node('T',fT, parents=['W'])
-        dgp.add_node('Y',fY, parents=['X','W','T'])
-        self.dgp = dgp
+    def fT(X, n):
+        return X @ coefs_T + np.random.uniform(-1, 1, size=n)
 
+    def fY(X, T, n):
+        return alpha * T + X @ coefs_Y + np.random.uniform(-1, 1, size=n)
+
+    dgp = DGPGraph()
+    dgp.add_node("X", fX)
+    dgp.add_node("T", fT, parents=["X"])
+    dgp.add_node("Y", fY, parents=["X", "T"])
+    ```
     """
+
     # TODO add some tracking to keep track of shape of variables & warn if problems arise
 
     def __init__(self):
@@ -84,14 +75,13 @@ class DGPGraph():
         return self.nodes[node][0]
 
     def get_parents(self, node):
-        """Return the list of parents for the given node or an empty list if
-        there are none."""
+        """Return the list of parents for the given node or an empty list if there are none."""
         if node in self.parents:
             return self.parents[node]
         return []
 
     def _check_func_returns(self):
-        """Checks and store the shape of the results returned by sample."""
+        """Check and store the shape of the results returned by sample."""
         n_test = 3
         shapes = {}
         values = self.sample(n_test)
@@ -162,7 +152,8 @@ class DGPGraph():
                 func, standardise = self.nodes[node]
                 value = func(*values_parent, n=n)
                 if standardise:
-                    pass  # TODO implement
+                    # TODO
+                    raise NotADirectoryError("standardise not implemented")
                 values[node] = value
 
         return values
@@ -177,6 +168,7 @@ class DGPGraph():
 
     def cate(self, n, treatment_node, outcome_node, condition_node,
              condition_values, treatment_val=1, control_val=0):
+        """Compute the estimated Conditional Average Treatment Effect from a sample size n."""
         condition_shape = self.shapes[condition_node]
         if len(condition_shape) > 1:
             raise NotImplementedError(
@@ -196,6 +188,3 @@ class DGPGraph():
             cate = s1[outcome_node].mean() - s0[outcome_node].mean()
             result[i] = cate
         return result
-
-    def fix_standardisation_parameters(self, n):
-        return self
