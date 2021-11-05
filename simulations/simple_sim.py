@@ -32,6 +32,8 @@ def data_generation(n_x=30, support_size=5):
 
     Casual relationships are X->T, X->Y, T->Y.
 
+    This is for a *continuous* treatment variable.
+
     """
     alpha = 0.3
     coefs_T = np.zeros(n_x)
