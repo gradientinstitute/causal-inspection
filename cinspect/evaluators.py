@@ -84,56 +84,6 @@ class ScoreEvaluator(Evaluator):
         self.scores = pd.DataFrame(self.scores)
 
 
-# class EffectWeightEvaluator(Evaluator):
-#     """
-#     Collect the effect weights from a linear model.
-#     """
-
-#     def __init__(
-#             self,
-#             property_name,
-#             property_index=None,
-#             model_name=None,
-#     ):
-#         self.params = []
-#         self.sparams = []
-#         self.stdys = []
-#         self.property_name = property_name
-#         self.property_index = property_index
-#         self.model_name = model_name
-
-#     def evaluate_train(self, estimator, X, y):
-#         param = getattr(estimator[-1], self.property_name)
-#         sy = np.std(y, ddof=1)
-#         if self.property_index is not None:
-#             param = param[self.property_index]
-#         self.params.append(param)
-#         self.sparams.append(param / sy)
-#         self.stdys.append(sy)
-
-#     def aggregate(self, name=None, estimator_score=None, outdir=None):
-#         param_mean = np.mean(self.params, axis=0)
-#         param_ste = np.std(self.params, axis=0, ddof=1)
-#         sparam_mean = np.mean(self.sparams, axis=0)
-#         sparam_ste = np.std(self.sparams, axis=0, ddof=1)
-#         pstr = f"effect mean = {param_mean:.4f}, std. err. = {param_ste:.4f}" \
-#             f"\neffect* mean = {sparam_mean:.4f}, std. err. = {sparam_ste:.4f}"
-#         print(pstr)
-#         if outdir is not None:
-#             data = {
-#                 "params": self.params,
-#                 "sparams": self.sparams,
-#                 "std(y)": self.stdys
-#             }
-#             data = pd.DataFrame(data=data)
-#             samplespath = join(outdir, f"effects_{self.model_name}.csv")
-#             statspath = join(outdir, f"effects_{self.model_name}.txt")
-#             print(f"SAVING Effects TO:\n\t{samplespath}\n\t{statspath}")
-#             data.to_csv(samplespath)
-#             with open(statspath, "w") as f:
-#                 f.write(pstr)
-
-
 Dependance = collections.namedtuple(
             "dependency",
             "valid feature_name grid density categorical predictions"

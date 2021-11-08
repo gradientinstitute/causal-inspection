@@ -46,12 +46,18 @@ def eval_model(
     for i, (rind, sind) in enumerate(cv.split(X, stratify)):
         LOG.info(f"Validation round {i + 1}")
         start = time.time()
-        Xs, ys = X.iloc[sind], y.iloc[sind]  # validation data
-        Xt, yt = X.iloc[rind], y.iloc[rind]
-        estimator.fit(Xt, yt)  # training data
+        if hasattr(X, "iloc"):
+            Xs, Xr = X.iloc[sind], X.iloc[rind]
+        else:
+            Xs, Xr = X[sind], X[rind]
+        if hasattr(y, "iloc"):
+            ys, yr = y.iloc[sind], y.iloc[rind]
+        else:
+            ys, yr = y[sind], y[rind]
+        estimator.fit(Xr, yr)  # training data
         for ev in evaluators:
             ev.evaluate_test(estimator, Xs, ys)
-            ev.evaluate_train(estimator, Xt, yt)
+            ev.evaluate_train(estimator, Xr, yr)
             ev.evaluate_all(estimator, X, y)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")

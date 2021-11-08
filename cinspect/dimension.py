@@ -1,10 +1,11 @@
 """Contains methods for reducing or understanding the dimensionality of a matrix."""
 
 import numpy as np
-from typing import Callable, Tuple, List, Optional
+import pandas as pd
+from typing import Callable, Tuple, List, Optional, Union
 
 
-def effective_rank(X: np.ndarray) -> float:
+def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:
     """
     Return the effective rank of a matrix, taking account near linear-dependence.
 
