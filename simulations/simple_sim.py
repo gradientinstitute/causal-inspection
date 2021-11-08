@@ -8,7 +8,8 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 
 from cinspect.model_evaluation import bootstrap_model
-from cinspect.evaluators import PartialDependanceEvaluator
+from cinspect.evaluators import (PartialDependanceEvaluator,
+                                 PermutationImportanceEvaluator)
 from simulations.datagen import DGPGraph
 
 
@@ -106,7 +107,8 @@ def main():
 
     # Casual estimation
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
-    bootstrap_model(best_model, X, Y, [pdeval])
+    pieval = PermutationImportanceEvaluator(n_repeats=5, ntop=5)
+    bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
 
     plt.show()
 

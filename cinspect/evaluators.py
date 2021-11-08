@@ -1,12 +1,10 @@
 """Result evaluator classes."""
-
-# import pickle
-# import numpy as np
+import numpy as np
+from typing import NamedTuple, Union, Sequence
 from collections import defaultdict
 import pandas as pd
-import collections
-# import matplotlib.pyplot as plt
-# from cinspect import importance
+import matplotlib.pyplot as plt
+from cinspect import importance
 from cinspect import dependence
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
@@ -84,13 +82,17 @@ class ScoreEvaluator(Evaluator):
         self.scores = pd.DataFrame(self.scores)
 
 
-Dependance = collections.namedtuple(
-            "dependency",
-            "valid feature_name grid density categorical predictions"
-)
+class Dependance(NamedTuple):
+    valid: bool
+    feature_name: str
+    grid: Union[str, int, Sequence]
+    density: np.ndarray
+    categorical: bool
+    predictions: Sequence[np.ndarray]
+
 
 class PartialDependanceEvaluator(Evaluator):
-    """ Partial dependence plot evaluator.
+    """Partial dependence plot evaluator.
 
     Parameters
     ----------
@@ -241,211 +243,218 @@ class PartialDependanceEvaluator(Evaluator):
                 print(f"Feature {dep.feature_name} is all nan, nothing to plot.")
 
 
-#class PermutationImportanceEvaluator(Evaluator):
-#    """ """
-#    def __init__(self, n_repeats=10,
-#                 ntop=10,features=None,end_transform_indx=None,grouped=False,
-#                 name=None, scorer="r2"):
-#        """
+class PermutationImportanceEvaluator(Evaluator):
+    """Permutation Importance Evaluator.
 
-#        Parameters
-#        ----------
-#        n_repeats: int
-#            The number of times to permute each column when computing importance
+    Parameters
+    ----------
+    n_repeats: int
+        The number of times to permute each column when computing
+        importance
 
-#        n_top: int
-#            The number of features to show on the plot
+    n_top: int
+        The number of features to show on the plot
 
-#        features: (optional) [int] or [str] or {str:[int]}
-#            A list of features, either indices or column names for which importance should be computed.
-#            Defaults to computing importance for all features.
+    features: (optional) [int] or [str] or {str:[int]}
+        A list of features, either indices or column names for which importance
+        should be computed. Defaults to computing importance for all features.
 
-#        end_transform_indx: (optional) int
-#            Set if you which to compute feature importance with respect to features after this point in the pipeline.
-#            Defaults to computing importance with respect to the whole pipeline.
+    end_transform_indx: (optional) int
+        Set if you which to compute feature importance with respect to features
+        after this point in the pipeline. Defaults to computing importance with
+        respect to the whole pipeline.
 
-#        grouped: bool (default=False)
-#            Should features be permuted together as groups. If True, features must be passed as a dictionary.
+    grouped: bool (default=False)
+        Should features be permuted together as groups. If True, features must
+        be passed as a dictionary.
+    """
 
+    def __init__(
+        self,
+        n_repeats=10,
+        ntop=10,
+        features=None,
+        end_transform_indx=None,
+        grouped=False,
+        name=None,
+        scorer="r2"
+    ):
+        """Construct a permutation importance evaluator."""
+        if not grouped and hasattr(features, "values"):  # flatten the dict if not grouped
+            result = []
+            for vals in features.values():
+                result.extend(vals)
+            features = result
 
-#        """
-#        if not grouped and hasattr(features,"values"): # flatten the dict if not grouped
-#            result = []
-#            for vals in features.values():
-#                result.extend(vals)
-#            features = result
+        if grouped and not hasattr(features, "values"):
+            raise ValueError("If features should be grouped they must be specified as a dictionary.")
 
-#        if grouped and not hasattr(features,"values"):
-#            raise ValueError("If features should be grouped they must be specified as a dictionary.")
+        if grouped and hasattr(features, "values"):  # grouped and passed a dict
+            features = {key: value for key, value in features.items() if len(value) > 0}
 
-#        if grouped and hasattr(features,"values"): # grouped and passed a dict
-#            features = {key:value for key,value in features.items() if len(value) > 0}
+        self.n_repeats = n_repeats
+        self.imprt_samples = []
+        self.ntop = ntop
+        self.features = features
+        self.end_transform_indx = end_transform_indx
+        self.grouped = grouped
+        self.name = name
+        self.scorer = scorer
 
-#        self.n_repeats = n_repeats
-#        self.imprt_samples = []
-#        self.ntop=ntop
-#        self.features=features
-#        self.end_transform_indx = end_transform_indx
-#        self.grouped = grouped
-#        self.name = name 
-#        self.scorer = scorer
+    def prepare(
+            self,
+            estimator,
+            X,
+            y=None,
+            random_state=42
+    ):
+        if self.end_transform_indx is not None:
+            transformer = clone(estimator[0:self.end_transform_indx])
+            X = transformer.fit_transform(X, y)
 
-#    def prepare(
-#            self,
-#            estimator,
-#            X,
-#            y=None,
-#            random_state=42
-#    ):
-#        if self.end_transform_indx is not None:
-#            transformer = clone(estimator[0:self.end_transform_indx])
-#            X = transformer.fit_transform(X, y)
+        if self.grouped:
+            self.columns = list(self.features.keys())
+            if all((type(c) == int for cols in self.features.values() for c in cols)):
+                self.feature_indices = self.features
+                self.col_by_name = False
+            elif all((type(c) == str for cols in self.features.values() for c in cols)):
+                self.feature_indices = {
+                    group_key: get_column_indices_and_names(X, columns)[0]
+                    for (group_key, columns) in self.features.items()
+                }
+                self.col_by_name = True
+            else:
+                raise ValueError("Groups of columns must either all be int "
+                                 "or str, not a mixture.""")
 
-#        if self.grouped:
-#            self.columns = list(self.features.keys())
-#            if all((type(c)==int for cols in self.features.values() for c in cols)):
-#                self.feature_indices = self.features
-#                self.col_by_name = False
-#            elif all((type(c)==str for cols in self.features.values() for c in cols)):
-#                self.feature_indices = {
-#                    group_key: get_column_indices_and_names(X_all,columns)[0]
-#                    for (group_key,columns) in self.features.items()
-#                }
-#                self.col_by_name=True
-#            else:
-#                raise ValueError("Groups of columns must either all be int or str, not a mixture.""")
+        else:
+            self.feature_indices, self.columns, self.col_by_name = \
+                get_column_indices_and_names(X, self.features)
 
-#        else:
-#            self.feature_indices, self.columns, self.col_by_name = \
-#                get_column_indices_and_names(X, self.features)
+        self.n_original_columns = X.shape[1]
+        self.random_state = random_state
 
-#        self.n_original_columns = X.shape[1]
-#        self.random_state = random_state
+    def evaluate_test(self, estimator, X, y):
+        if self.end_transform_indx is not None:
+            transformer = estimator[0:self.end_transform_indx]
+            Xt = transformer.transform(X)
+            predictor = estimator[self.end_transform_indx:]
 
-#    def evaluate_test(self, estimator, X, y):
-#        if self.end_transform_indx is not None:
-#            transformer = estimator[0:self.end_transform_indx]
-#            Xt = transformer.transform(X)
-#            predictor = estimator[self.end_transform_indx:]
+        else:
+            predictor = estimator
+            Xt = X
 
-#        else:
-#            predictor = estimator
-#            Xt = X
+        # we will get the indices by name - it is ok if the shape of the data
+        # has changed, provided all the columns we want exist.
+        if self.grouped:
+            feature_indices = self.feature_indices
+            if Xt.shape[1] != self.n_original_columns:
+                raise ValueError(f"Data dimension has changed: "
+                                 f"{self.n_original_columns}->{Xt.shape[1]}")
+        else:
+            feature_indices = _check_feature_indices(
+                self.feature_indices,
+                self.col_by_name,
+                self.columns,
+                Xt,
+                self.n_original_columns
+            )
 
-#        # we will get the indices by name - it is ok if the shape of the data
-#        # has changed, provided all the columns we want exist.
-#        if self.grouped:
-#            feature_indices = self.feature_indices
-#            if Xt.shape[1] != self.n_original_columns:
-#                raise ValueError(f"Data dimension has changed:{self.n_original_columns}->{Xt.shape[1]}")
-#        else:
-#            feature_indices = _check_feature_indices(
-#                self.feature_indices,
-#                self.col_by_name,
-#                self.columns,
-#                Xt,
-#                self.n_original_columns
-#            )
+        imprt = importance.permutation_importance(
+                predictor, Xt, y, n_jobs=1, n_repeats=self.n_repeats,
+                random_state=self.random_state, scoring=self.scorer,
+                features=feature_indices,  # if grouped {str:[int]}
+                grouped=self.grouped
+            )
 
-#        imprt = importance.permutation_importance(
-#                predictor, Xt, y, n_jobs=1, n_repeats=self.n_repeats,
-#                random_state=self.random_state, scoring=self.scorer,
-#                features=feature_indices, # if grouped {str:[int]}
-#                grouped = self.grouped
-#            )
-#        self.imprt_samples.append(imprt.importances)
+        self.imprt_samples.append(imprt.importances)
 
-#    def aggregate(self, name=None, estimator_score=None, outdir=None):
-#        if name is None:
-#            name = self.name
-#        self.samples = np.hstack(self.imprt_samples)
-#        title = "Permutation Importance"
-#        if estimator_score is not None:
-#            title = f"{title}, score = {estimator_score:.4f}"
-#        if name is not None:
-#            title = f"{name}-{title}"
-#        _plot_importance(self.samples, self.ntop, self.columns, title, xlabel="Permutation Importance",outdir=outdir)
-
-
-#def get_column_indices_and_names(X, columns=None):
-#    """
-#    Return the indicies and names of the specified columns as a list.
-
-#    Parameters
-#    ----------
-#    X: numpy array or pd.DataFrame
-#    columns: iterable of strings or ints
-#    """
-#    # columns not specified - return all
-#    if columns is None:
-#        if hasattr(X, "columns"):
-#            columns = X.columns
-#        else:
-#            columns = range(X.shape[1])
-
-#    # columns have been specified by index
-#    if all((type(c) == int for c in columns)):
-#        passed_by_name = False
-#        indices = list(columns)
-#        if hasattr(X, "columns"):
-#            names = [X.columns[indx] for indx in columns]
-#        else:
-#            names = [f"column_{indx}" for indx in columns]
-
-#    # columns have been specified by name
-#    else:
-#        if hasattr(X, "columns"):
-#            passed_by_name = True
-#            indices = []
-#            for c in columns:
-#                try:
-#                    c_indx = X.columns.get_loc(c)
-#                    indices.append(c_indx)
-#                except KeyError:
-#                    raise KeyError(f"Column:{c} is not in data.")
-#            names = list(columns)
-
-#        else:
-#            raise ValueError("Cannot extract columns based on non-integer "
-#                             "specifiers unless X is a DataFrame.")
-
-#    return indices, names, passed_by_name
+    def aggregate(self):
+        self.samples = np.hstack(self.imprt_samples)
+        title = "Permutation Importance"
+        title = f"{self.name}-{title}"
+        _plot_importance(self.samples, self.ntop, self.columns, title,
+                         xlabel="Permutation Importance")
 
 
-#def _plot_importance(imprt_samples, topn, columns, title, xlabel=None,
-#                     outdir=None, file_type=IMAGE_TYPE):
-#    # Get topn important features on average
-#    imprt_mean = np.mean(imprt_samples, axis=1)
-#    if topn < 1:
-#        topn = len(imprt_mean)
-#    #abs so it applies to both directional importances (coefficients) and positive importances
-#    order = np.abs(imprt_mean).argsort()[-topn:]
+def get_column_indices_and_names(X, columns=None):
+    """
+    Return the indicies and names of the specified columns as a list.
 
-#    # Plot summaries - top n important features
-#    fig, ax = plt.subplots(figsize=(15, 10))
-#    ax.boxplot(imprt_samples[order].T, vert=False,
-#               labels=np.array(columns)[order])
-#    ax.set_title(f"{title} - top {topn}")
-#    if xlabel is not None:
-#        ax.set_xlabel(xlabel)
+    Parameters
+    ----------
+    X: numpy array or pd.DataFrame
+    columns: iterable of strings or ints
+    """
+    # columns not specified - return all
+    if columns is None:
+        if hasattr(X, "columns"):
+            columns = X.columns
+        else:
+            columns = range(X.shape[1])
 
-#    if outdir is not None:
-#        fpath = join(outdir, f"{title}.{file_type}")
-#        fig.savefig(fpath, bbox_inches="tight")
+    # columns have been specified by index
+    if all((type(c) == int for c in columns)):
+        passed_by_name = False
+        indices = list(columns)
+        if hasattr(X, "columns"):
+            names = [X.columns[indx] for indx in columns]
+        else:
+            names = [f"column_{indx}" for indx in columns]
+
+    # columns have been specified by name
+    else:
+        if hasattr(X, "columns"):
+            passed_by_name = True
+            indices = []
+            for c in columns:
+                try:
+                    c_indx = X.columns.get_loc(c)
+                    indices.append(c_indx)
+                except KeyError:
+                    raise KeyError(f"Column:{c} is not in data.")
+            names = list(columns)
+
+        else:
+            raise ValueError("Cannot extract columns based on non-integer "
+                             "specifiers unless X is a DataFrame.")
+
+    return indices, names, passed_by_name
 
 
-#def _check_feature_indices(feature_indices, col_by_name, columns, Xt, n_expected_columns):
+def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
 
-#    if col_by_name and hasattr(Xt, "columns"):
-#        if not all((c in Xt.columns for c in columns)):
-#            missing = set(columns).difference(Xt.columns)
-#            raise ValueError(f"Specified features not found:{missing}")
-#        feature_indices = [Xt.columns.get_loc(c) for c in columns]
+    # Get topn important features on average
+    imprt_mean = np.mean(imprt_samples, axis=1)
+    if topn < 1:
+        topn = len(imprt_mean)
+    #abs so it applies to both directional importances (coefficients) and
+    # positive importances
+    order = np.abs(imprt_mean).argsort()[-topn:]
 
-#    # we are extracting features by index - the shape cannot have changed.
-#    else:
-#        if Xt.shape[1] != n_expected_columns:
-#            raise ValueError(f"Data dimension has changed and columns are being selected by index: "
-#                             f"{n_expected_columns}->{Xt.shape[1]}")
+    # Plot summaries - top n important features
+    fig, ax = plt.subplots(figsize=(15, 10))
+    ax.boxplot(imprt_samples[order].T, vert=False,
+               labels=np.array(columns)[order])
+    ax.set_title(f"{title} - top {topn}")
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
 
-#    return feature_indices
+
+def _check_feature_indices(feature_indices, col_by_name, columns, Xt,
+                           n_expected_columns):
+
+    if col_by_name and hasattr(Xt, "columns"):
+        if not all((c in Xt.columns for c in columns)):
+            missing = set(columns).difference(Xt.columns)
+            raise ValueError(f"Specified features not found:{missing}")
+        feature_indices = [Xt.columns.get_loc(c) for c in columns]
+
+    # we are extracting features by index - the shape cannot have changed.
+    else:
+        if Xt.shape[1] != n_expected_columns:
+            raise ValueError(f"Data dimension has changed and columns are "
+                             "being selected by index: "
+                             f"{n_expected_columns}->{Xt.shape[1]}")
+
+    return feature_indices

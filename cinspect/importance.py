@@ -8,9 +8,6 @@ from sklearn.metrics import check_scoring
 from sklearn.utils import Bunch, check_array, check_random_state
 from sklearn.utils.validation import _deprecate_positional_args
 
-# default image type to use for figures TODO delete dependence on this
-IMAGE_TYPE = "png"
-
 
 def _calculate_permutation_scores(estimator, X, y, col_idx, random_state,
                                   n_repeats, scorer):
@@ -45,21 +42,22 @@ def _check_feature_dict_valid(features):
     for f_list in features.values():
         for f in f_list:
             if f in result:
-                raise ValueError(f"features must not be duplicated, even under different groups, got:{features}")
+                raise ValueError("features must not be duplicated, even "
+                                 f"under different groups, got:{features}")
             if type(f) != int:
                 raise ValueError(f"keys must map to lists of integers, got:{features}")
             result.append(f)
-  
+
 
 def _check_feature_list_valid(features):
-    if not all((type(c)==int for c in features)):   
+    if not all((type(c) == int for c in features)):
         error_msg = f"features must be supplied as a list must all be integers, got:{features}"
         raise ValueError(error_msg)
-    
 
-def flatten_feature_dict(features):
+
+def _flatten_feature_dict(features):
     result = []
-    for key,values in features.items():
+    for key, values in features.items():
         result.extend(values)
     return result
 
@@ -111,13 +109,13 @@ def permutation_importance(estimator, X, y,*, scoring=None, n_repeats=5,
         feature.
         Pass an int to get reproducible results across function calls.
         See :term: `Glossary <random_state>`.
-        
+
     features: [int] or {str:[int]}, default=None
         Either a list of feature indices for which importance should be computed
         or a dictionary from name -> list of indices. If a dictionary and `grouped` is true
         then features corresponding to the same key will be permuted together.
         By default, compute importance for all features.
-    
+
     grouped: bool, default=False
         Should the supplied features be permuted together within specified groups.
         If True, features must be supplied as a dict.
@@ -154,23 +152,22 @@ def permutation_importance(estimator, X, y,*, scoring=None, n_repeats=5,
     >>> result.importances_std
     array([0.2211..., 0.       , 0.       ])
     """
-   
+
     if not hasattr(X, "iloc"):
-        X = check_array(X, force_all_finite='allow-nan', dtype=None)
-    
-    
+        X = check_array(X, force_all_finite="allow-nan", dtype=None)
+
     if grouped:
         error_msg = "if grouped is true, features must be passed as a dictionary"
-        assert (hasattr(features,"keys") and hasattr(features,"values")),error_msg
+        assert (hasattr(features, "keys") and hasattr(features, "values")), error_msg
         _check_feature_dict_valid(features)
-        
+
     elif features is not None:
-        if (hasattr(features,"keys") and hasattr(features,"values")):
+        if (hasattr(features, "keys") and hasattr(features, "values")):
             _check_feature_dict_valid(features)
-            features = flatten_feature_dict(features)
-        
+            features = _flatten_feature_dict(features)
+
         _check_feature_list_valid(features)
-            
+
     # Precompute random seed from the random state to be used
     # to get a fresh independent RandomState instance for each
     # parallel call to _calculate_permutation_scores, irrespective of
@@ -185,10 +182,11 @@ def permutation_importance(estimator, X, y,*, scoring=None, n_repeats=5,
     if features is None:
         column_indexes = range(X.shape[1])
     elif grouped:
-        column_indexes = [np.array(vals) for vals in features.values()] # each col_indx will be a numpy array
+        # each col_indx will be a numpy array
+        column_indexes = [np.array(vals) for vals in features.values()]
     else:
-        column_indexes = features # each col_indx will be an int
-    
+        column_indexes = features  # each col_indx will be an int
+
     scores = Parallel(n_jobs=n_jobs)(delayed(_calculate_permutation_scores)(
         estimator, X, y, col_idx, random_seed, n_repeats, scorer
     ) for col_idx in column_indexes)
