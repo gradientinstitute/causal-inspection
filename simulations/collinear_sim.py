@@ -120,8 +120,7 @@ def main():
 
         # Casual estimation -- Bootstrap
         if name != "ridge_gs":  # needs special treatment
-            bteval = BinaryTreatmentEffect(treatment_column="T",
-                                           evaluate_mode="test")
+            bteval = BinaryTreatmentEffect(treatment_column="T")  # all data
             bootstrap_model(mod, X, Y, [bteval], replications=30)
             results[name]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
 
@@ -142,7 +141,7 @@ def main():
     # get common samples in the train and test folds
     ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
                             cv=GroupKFold(n_splits=5))
-    bteval = BinaryTreatmentEffect(treatment_column="T", evaluate_mode="test")
+    bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
     bootstrap_model(ridge_gs, X, Y, [bteval], replications=30, groups=True)
     results["ridge_gs"]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
 
