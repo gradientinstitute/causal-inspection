@@ -3,6 +3,23 @@ import numpy as np
 import networkx as nx
 
 
+def generate_sythetic_approximation(X: np.ndarray) -> np.ndarray:
+    """
+    Generate data with the same marginal distribution and 'similar' covariance structure.
+
+    This is a quick hack, to generate data with at least some properties of the original.
+    The covariance matrix is used to capture all the relationships between variables,
+    regardless of whether they are continuous or categorical.
+    """
+    c = X.T@X
+    Xs = np.random.multivariate_normal(X.mean(axis=0), c, size=len(X))
+    for col in range(X.shape[1]):
+        vals = np.sort(X[:, col])
+        order = np.argsort(Xs[:, col])
+        Xs[order, col] = vals
+    return Xs
+
+
 class DGPGraph():
     """A high level Interface for building Bayesian network data generating processes.
 
