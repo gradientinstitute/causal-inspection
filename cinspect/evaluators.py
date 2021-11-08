@@ -1,6 +1,6 @@
 """Result evaluator classes."""
 import numpy as np
-from typing import NamedTuple, Union, Sequence
+from typing import NamedTuple, Union, Sequence, Any
 from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -80,6 +80,78 @@ class ScoreEvaluator(Evaluator):
 
     def aggregate(self):
         self.scores = pd.DataFrame(self.scores)
+
+
+class BinaryTreatmentEffect(Evaluator):
+    """Estimate the ATE of a binary treatment.
+
+    NOTE: This assumes SUTVA holds.
+
+    Parameters
+    ----------
+
+    """
+
+    def __init__(
+        self,
+        treatment_column: Union[str, int],
+        treatment_val: Any = 1,
+        control_val: Any = 0,
+        evaluate_mode: str = "all"
+    ):
+        self.treatment_column = treatment_column
+        self.treatment_val = treatment_val
+        self.control_val = control_val
+        self.evaluate_mode = evaluate_mode
+        self.ate_samples = []
+
+    def prepare(self, estimator, X, y, random_state=None):
+        T = X[self.treatment_column]
+        assert self.treatment_val in T
+        assert self.control_val in T
+
+    def _evaluate(self, estimator, X, y):
+        # Copy covariates so we can manipulate the treatment
+        Xc = X.copy()
+
+        # predict treated outcomes
+        Xc = _np_or_pd_fill_col(Xc, self.treatment_column, self.treatment_val)
+        Ey_treated = estimator.predict(Xc)
+
+        # predict not treated outcomes
+        Xc = _np_or_pd_fill_col(Xc, self.treatment_column, self.control_val)
+        Ey_control = estimator.predict(Xc)
+
+        # ATE
+        ate = np.mean(Ey_treated - Ey_control)
+        self.ate_samples.append(ate)
+
+    def evaluate_all(self, estimator, X, y):
+        if self.evaluate_mode == "all":
+            self._evaluate(estimator, X, y)
+
+    def evaluate_train(self, estimator, X, y):
+        if self.evaluate_mode == "train":
+            self._evaluate(estimator, X, y)
+
+    def evaluate_test(self, estimator, X, y):
+        if self.evaluate_mode == "test":
+            self._evaluate(estimator, X, y)
+
+    def aggregate(self):
+        self.ate = np.mean(self.ate_samples)
+        self.ate_ste = np.std(self.ate_samples, ddof=1)
+
+    def report(self):
+        print(f"Average treatment effect: {self.ate} (self.ate_ste)")
+
+
+def _np_or_pd_fill_col(X, column, fill_val):
+    if isinstance(X, pd.DataFrame):
+        X[column] = fill_val
+    else:
+        X[:, column] = fill_val
+    return X
 
 
 class Dependance(NamedTuple):

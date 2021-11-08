@@ -76,7 +76,8 @@ def bootstrap_model(
     y: Union[pd.DataFrame, pd.Series],
     evaluators: Sequence[Evaluator],
     replications: int = 100,
-    random_state: Optional[Union[int, np.random.RandomState]] = None
+    random_state: Optional[Union[int, np.random.RandomState]] = None,
+    groups: bool = False
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -86,6 +87,15 @@ def bootstrap_model(
 
     The same bootstrap samples of X and y are passed to `evaluate_train`,
     `evaluate_test` and `evaluate_all`.
+
+    Parameters
+    ----------
+    groups: bool
+       input the indices of the re-sampled datasets into the estimator as
+       `estimator.fit(X_resample, y_resample, groups=indices_resample)`. This
+       can only be used with e.g. `GridSearchCV` where `cv` is `GroupKFold`.
+       This stops the same sample appearing in both the test and training
+       splits of any inner cross validation.
     """
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
@@ -95,12 +105,19 @@ def bootstrap_model(
 
     LOG.info("Bootstrapping ...")
 
+    indices = np.arange(len(X))
+
     # Bootstrapping loop
     for i in range(replications):
         LOG.info(f"Bootstrap round {i + 1}")
         start = time.time()
-        Xb, yb = resample(X, y)
-        estimator.fit(Xb, yb)
+        Xb, yb, indicesb = resample(X, y, indices)
+
+        if groups:
+            estimator.fit(Xb, yb, groups=indicesb)
+        else:
+            estimator.fit(Xb, yb)
+
         for ev in evaluators:
             ev.evaluate_train(estimator, Xb, yb)
             ev.evaluate_test(estimator, Xb, yb)
