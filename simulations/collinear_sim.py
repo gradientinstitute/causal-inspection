@@ -12,6 +12,7 @@ from sklearn.kernel_approximation import RBFSampler
 
 from cinspect.model_evaluation import bootstrap_model, eval_model
 from cinspect.evaluators import BinaryTreatmentEffect
+from cinspect.estimators import BinaryTreatmentRegressor
 from cinspect.dimension import effective_rank
 from simulations.datagen import DGPGraph
 
@@ -107,9 +108,10 @@ def main():
     LOG.info(f"Best model R^2 = {pre.best_score_:.3f}, alpha = {best_alpha}")
 
     models = {
-        "linear": LinearRegression(),
-        "ridge_pre": ridge_pre,
-        "ridge_gs": pre
+        # "linear": LinearRegression(),
+        # "ridge_pre": ridge_pre,
+        # "ridge_gs": pre,
+        "btr": BinaryTreatmentRegressor(pre, "T", 1.)
     }
 
     results = {}
@@ -139,11 +141,22 @@ def main():
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't
     # get common samples in the train and test folds
-    ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
-                            cv=GroupKFold(n_splits=5))
-    bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-    bootstrap_model(ridge_gs, X, Y, [bteval], replications=30, groups=True)
-    results["ridge_gs"]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
+    if "ridge_gs" in models:
+        ridge_gs = GridSearchCV(Ridge(),
+                                param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
+                                cv=GroupKFold(n_splits=5))
+        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
+        bootstrap_model(ridge_gs, X, Y, [bteval], replications=30, groups=True)
+        results["ridge_gs"]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
+
+    if "btr" in models:
+        btr = GridSearchCV(Ridge(),
+                           param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
+                           cv=GroupKFold(n_splits=5))
+        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
+        bootstrap_model(btr, X, Y, [bteval], replications=30, groups=True)
+        results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
+
 
     # Print results:
     print(f"True ATE: {TRUE_ATE:.3f}")

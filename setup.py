@@ -1,4 +1,4 @@
-"""Setup tools file for causal_inspection
+"""Setup tools file for causal_inspection.
 
 See:
 https://packaging.python.org/en/latest/distributing.html
@@ -15,7 +15,7 @@ from setuptools import setup
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
@@ -29,7 +29,7 @@ setup(
     description="Scikit-learn inspired inspection utilities for causal models",
     long_description=long_description,
 
-    # The project's main homepage.
+    # The project"s main homepage.
     url="https://github.com/gradientinstitute/causal_inspection",
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
@@ -50,37 +50,38 @@ setup(
     ],
 
     # What does your project relate to?
-    keywords='causality inspection interpretability',
+    keywords="causality inspection interpretability",
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=['cinspect'], 
+    packages=["cinspect"],
 
     # List run-time dependencies here.  These will be installed by pip when
-    # your project is installed. For an analysis of 'install_requires' vs pip's
+    # your project is installed. For an analysis of "install_requires" vs pip"s
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'numpy',
-        'scipy',
-        'pandas',
-        'scikit-learn',
-        'matplotlib',
+        "numpy",
+        "scipy",
+        "pandas",
+        "scikit-learn",
+        "matplotlib",
+        "multimethod"
     ],
     extras_require={
-        'dev': [
-            'pytest',
-            'pytest-flake8',
-            'pytest-mock',
-            'flake8-bugbear',
-            'flake8-builtins',
-            'pytest-cov',
-            'flake8-comprehensions',
-            'flake8-docstrings',
-            'flake8-quotes',
-            'mypy',
-            'mypy_extensions',
-            'networkx'
+        "dev": [
+            "pytest",
+            "pytest-flake8",
+            "pytest-mock",
+            "flake8-bugbear",
+            "flake8-builtins",
+            "pytest-cov",
+            "flake8-comprehensions",
+            "flake8-docstrings",
+            "flake8-quotes",
+            "mypy",
+            "mypy_extensions",
+            "networkx"
         ]
     }
 )
