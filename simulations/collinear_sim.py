@@ -9,6 +9,7 @@ from sklearn.linear_model import Ridge, LinearRegression
 from sklearn.model_selection import (GridSearchCV, ShuffleSplit, RepeatedKFold,
                                      GroupKFold)
 from sklearn.kernel_approximation import RBFSampler
+from sklearn.base import clone
 
 from cinspect.model_evaluation import bootstrap_model, eval_model
 from cinspect.evaluators import BinaryTreatmentEffect
@@ -101,17 +102,18 @@ def main():
     LOG.info(f"X dim: {X.shape[1]}, effective rank: {eff_r:.3f}")
 
     # Model selection
-    pre = GridSearchCV(Ridge(), param_grid={"alpha": [1e-2, 1e-1, 1, 10]})
-    pre.fit(X, Y)
-    best_alpha = pre.best_params_["alpha"]
-    ridge_pre = pre.best_estimator_
-    LOG.info(f"Best model R^2 = {pre.best_score_:.3f}, alpha = {best_alpha}")
+    ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": [1e-2, 1e-1, 1, 10]})
+    ridge_gs.fit(X, Y)
+    best_alpha = ridge_gs.best_params_["alpha"]
+    ridge_pre = clone(ridge_gs.best_estimator_)
+    LOG.info(f"Best model R^2 = {ridge_gs.best_score_:.3f}, "
+             f"alpha = {best_alpha}")
 
     models = {
         # "linear": LinearRegression(),
         # "ridge_pre": ridge_pre,
-        # "ridge_gs": pre,
-        "btr": BinaryTreatmentRegressor(pre, "T", 1.)
+        "ridge_gs": ridge_gs,
+        "btr": BinaryTreatmentRegressor(ridge_gs, "T", 1.)
     }
 
     results = {}
@@ -121,10 +123,9 @@ def main():
         results[name] = {}
 
         # Casual estimation -- Bootstrap
-        if name != "ridge_gs":  # needs special treatment
-            bteval = BinaryTreatmentEffect(treatment_column="T")  # all data
-            bootstrap_model(mod, X, Y, [bteval], replications=30)
-            results[name]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
+        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data
+        bootstrap_model(mod, X, Y, [bteval], replications=30)
+        results[name]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
 
         # Casual estimation -- KFold
         bteval = BinaryTreatmentEffect(treatment_column="T",
@@ -141,18 +142,17 @@ def main():
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't
     # get common samples in the train and test folds
+    ridge_gs_g = GridSearchCV(Ridge(),
+                              param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
+                              cv=GroupKFold(n_splits=5))
+
     if "ridge_gs" in models:
-        ridge_gs = GridSearchCV(Ridge(),
-                                param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
-                                cv=GroupKFold(n_splits=5))
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(ridge_gs, X, Y, [bteval], replications=30, groups=True)
-        results["ridge_gs"]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
+        results["ridge_gs"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
     if "btr" in models:
-        btr = GridSearchCV(Ridge(),
-                           param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
-                           cv=GroupKFold(n_splits=5))
+        btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(btr, X, Y, [bteval], replications=30, groups=True)
         results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
