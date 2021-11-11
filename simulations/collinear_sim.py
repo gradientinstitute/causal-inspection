@@ -109,6 +109,9 @@ def load_synthetic_data():
 
 def main():
     """Run the simulation."""
+    alpha_range = np.logspace(-1, 4, 30)
+    replications = 100
+
     X, Y = load_synthetic_data()
 
     # Get the effective rank of the data
@@ -116,7 +119,7 @@ def main():
     LOG.info(f"X dim: {X.shape[1]}, effective rank: {eff_r:.3f}")
 
     # Model selection
-    ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": [1e-2, 1e-1, 1, 10]})
+    ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": alpha_range}, cv=5)
     ridge_gs.fit(X, Y)
     best_alpha = ridge_gs.best_params_["alpha"]
     ridge_pre = clone(ridge_gs.best_estimator_)
@@ -138,31 +141,31 @@ def main():
 
         # Casual estimation -- Bootstrap
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data
-        bootstrap_model(mod, X, Y, [bteval], replications=30)
+        bootstrap_model(mod, X, Y, [bteval], replications=replications)
         results[name]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
 
         # Casual estimation -- KFold
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
         eval_model(mod, X, Y, [bteval],
-                   RepeatedKFold(n_splits=10, n_repeats=3))
+                   RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3))
         results[name]["KFold"] = (bteval.ate, bteval.ate_ste)
 
         # Casual estimation -- ShuffleSplit
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
-        eval_model(mod, X, Y, [bteval], ShuffleSplit(n_splits=30))
+        eval_model(mod, X, Y, [bteval], ShuffleSplit(n_splits=replications))
         results[name]["ShuffleSplit"] = (bteval.ate, bteval.ate_ste)
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't
     # get common samples in the train and test folds
     ridge_gs_g = GridSearchCV(Ridge(),
-                              param_grid={"alpha": [1e-2, 1e-1, 1, 10]},
+                              param_grid={"alpha": alpha_range},
                               cv=GroupKFold(n_splits=5))
 
     if "ridge_gs" in models:
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(ridge_gs, X, Y, [bteval], replications=30, groups=True)
+        bootstrap_model(ridge_gs, X, Y, [bteval], replications=replications, groups=True)
         results["ridge_gs"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
     if "btr" in models:
