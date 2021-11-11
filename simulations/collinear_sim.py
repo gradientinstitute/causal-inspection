@@ -80,22 +80,36 @@ def data_generation(confounder_dim=200, latent_dim=5):
     return dgp
 
 
-def main():
-    """Run the simulation."""
-    n=500
+def make_data():
+    n = 500
     dgp = data_generation()
 
     # Generate data for the scenario
     data = dgp.sample(n)
-
-    # Get the ATE from the simulation
-    ate = dgp.ate(n=n, treatment_node="T", outcome_node="Y")
 
     # Prepare the data for the pipeline
     Y = data.pop("Y")
     dX = data.pop("X")
     data.update({f"X{i}": x for i, x in enumerate(dX.T)})
     X = pd.DataFrame(data)
+    return X, Y
+
+
+def load_synthetic_data():
+    data_file = "data/synthetic_data.csv"
+    data = pd.read_csv(data_file, index_col=0)
+    data.drop(columns=["p(t=1)"], inplace=True)
+
+    Y = data['y'].values
+    data.drop(columns=["y"], inplace=True)
+    data.rename(columns={'t': 'T'}, inplace=True)
+    X = data
+    return X, Y
+
+
+def main():
+    """Run the simulation."""
+    X, Y = load_synthetic_data()
 
     # Get the effective rank of the data
     eff_r = effective_rank(X)
@@ -157,10 +171,8 @@ def main():
         bootstrap_model(btr, X, Y, [bteval], replications=30, groups=True)
         results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
-
     # Print results:
     print(f"True ATE: {TRUE_ATE:.3f}")
-    print(f"Simulator ATE (different sample): {ate:.3f}")
     for name, methods in results.items():
         print(name)
         for method, res in methods.items():
