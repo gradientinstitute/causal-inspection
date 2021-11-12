@@ -171,7 +171,7 @@ def main():
     if "btr" in models:
         btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(btr, X, Y, [bteval], replications=30, groups=True)
+        bootstrap_model(btr, X, Y, [bteval], replications=replications, groups=True)
         results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
     # Print results:
