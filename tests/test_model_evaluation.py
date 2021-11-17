@@ -1,4 +1,8 @@
-"""Tests for model_evaluation module."""
+"""
+Tests for model_evaluation module.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 
 import numpy as np
 import pandas as pd

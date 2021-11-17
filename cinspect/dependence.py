@@ -1,4 +1,8 @@
-"""Partial dependence and individual conditional expectation functions."""
+"""
+Partial dependence and individual conditional expectation functions.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 import numbers
 import matplotlib.pyplot as plt
 import numpy as np

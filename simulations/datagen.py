@@ -1,4 +1,8 @@
-"""Data generation classed for causal simulations."""
+"""
+Data generation classed for causal simulations.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 import numpy as np
 import networkx as nx
 

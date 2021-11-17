@@ -1,4 +1,8 @@
-"""Some convenience estimators for causal estimation."""
+"""
+Some convenience estimators for causal estimation.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 import numpy as np
 import pandas as pd
 

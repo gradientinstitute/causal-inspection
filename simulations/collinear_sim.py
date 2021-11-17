@@ -1,4 +1,8 @@
-"""An example of dealing with collinearity in the confounders."""
+"""
+An example of dealing with collinearity in the confounders.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 import logging
 import numpy as np
 import pandas as pd

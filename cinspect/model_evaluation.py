@@ -1,4 +1,8 @@
-"""Causal model evaluation functions."""
+"""
+Causal model evaluation functions.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 
 import time
 import logging

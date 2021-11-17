@@ -1,6 +1,8 @@
 """
 Script to insert Gradient institute cpwrite statement into all python files.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
 """
+
 
 import os
 from typing import List

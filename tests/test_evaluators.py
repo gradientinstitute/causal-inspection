@@ -1,4 +1,8 @@
-"""Test for the evaluators module."""
+"""
+Test for the evaluators module.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 
 from cinspect.evaluators import Evaluator, ScoreEvaluator
 

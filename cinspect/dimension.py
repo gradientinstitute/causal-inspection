@@ -1,4 +1,8 @@
-"""Contains methods for reducing or understanding the dimensionality of a matrix."""
+"""
+Contains methods for reducing or understanding the dimensionality of a matrix.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 
 import numpy as np
 import pandas as pd

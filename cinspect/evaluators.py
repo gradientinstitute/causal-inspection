@@ -1,4 +1,8 @@
-"""Result evaluator classes."""
+"""
+Result evaluator classes.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 import numpy as np
 from typing import NamedTuple, Union, Sequence, Any
 from collections import defaultdict

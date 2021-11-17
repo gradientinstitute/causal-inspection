@@ -1,7 +1,9 @@
-"""Permutation importance for estimators.
-
-Adapted from sklearn to allow computation for only a subset of features.
 """
+Permutation importance for estimators.
+Adapted from sklearn to allow computation for only a subset of features.
+Copyright (C) 2019-2021 Gradient Institute Ltd.
+"""
+
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.metrics import check_scoring

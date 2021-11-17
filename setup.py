@@ -1,9 +1,11 @@
-"""Setup tools file for causal_inspection.
-
+"""
+Setup tools file for causal_inspection.
 See:
 https://packaging.python.org/en/latest/distributing.html
 https://github.com/pypa/sampleproject
+Copyright (C) 2019-2021 Gradient Institute Ltd.
 """
+
 
 # To use a consistent encoding
 from codecs import open
