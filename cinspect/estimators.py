@@ -14,7 +14,7 @@ from scipy import stats
 
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.utils.validation import check_is_fitted
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, BayesianRidge
 
 
 class RegressionStatisticalResults(NamedTuple):
@@ -57,7 +57,22 @@ class RegressionStatisticalResults(NamedTuple):
         return reprs
 
 
-class LinearRegressionStat(LinearRegression):
+class _StatMixin():
+
+    def model_statistics(self):
+        """Get the coefficient statistics for this estimator."""
+        check_is_fitted(self, attributes=["coef_", "coef_se_"])
+        stats = RegressionStatisticalResults(
+            beta=self.coef_,
+            std_err=self.coef_se_,
+            dof=self.dof_,
+            t_stat=self.t_,
+            p_value=self.p_
+        )
+        return stats
+
+
+class LinearRegressionStat(LinearRegression, _StatMixin):
     """Scikit learn's LinearRegression estimator with coefficient stats."""
 
     def fit(self, X, y, sample_weight=None):
@@ -71,17 +86,19 @@ class LinearRegressionStat(LinearRegression):
         self.p_ = (1. - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
         return self
 
-    def model_statistics(self):
-        """Get the coefficient statistics for this estimator."""
-        check_is_fitted(self, attributes=["coef_", "coef_se_"])
-        stats = RegressionStatisticalResults(
-            beta=self.coef_,
-            std_err=self.coef_se_,
-            dof=self.dof_,
-            t_stat=self.t_,
-            p_value=self.p_
-        )
-        return stats
+
+class BayesianRidgeStat(BayesianRidge, _StatMixin):
+    """Scikit learn's BayesianRidge estimator with coefficient stats."""
+
+    def fit(self, X, y, sample_weight=None):
+        super().fit(X, y, sample_weight)
+        n, d = X.shape
+        self.dof_ = n - d  # NOTE: THIS IS AN UNDERESTIMATE
+        self.coef_se_ = np.sqrt(self.sigma_.diagonal())
+        # NOTE: THIS IS NOT USING THE PROPER POSTERIOR
+        self.t_ = self.coef_ / self.coef_se_
+        self.p_ = (1. - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
+        return self
 
 
 class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
