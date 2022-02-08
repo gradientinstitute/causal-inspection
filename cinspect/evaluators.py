@@ -199,7 +199,8 @@ class PartialDependanceEvaluator(Evaluator):
         evaluate_mode="all",
         color="black",
         color_samples="grey",
-        pd_alpha=None
+        pd_alpha=None,
+        ci_bounds=(0.025, 0.975)
     ):
         """Construct a PartialDependanceEvaluator."""
         self.mode = mode
@@ -214,6 +215,7 @@ class PartialDependanceEvaluator(Evaluator):
         self.pd_alpha = pd_alpha
         self.color = color
         self.color_samples = color_samples
+        self.ci_bounds = ci_bounds
 
 
     def prepare(self, estimator, X, y, random_state=None):
@@ -313,7 +315,8 @@ class PartialDependanceEvaluator(Evaluator):
                     mode=self.mode,
                     color=self.color,
                     color_samples=self.color_samples,
-                    alpha=self.pd_alpha
+                    alpha=self.pd_alpha,
+                    ci_bounds=self.ci_bounds
                 )
             else:
                 print(f"Feature {dep.feature_name} is all nan, nothing to plot.")

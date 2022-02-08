@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from typing import Union, Any, List, Tuple, Optional, cast, Literal
+from scipy.stats.mstats import mquantiles
 
 
 # default image type to use for figures TODO delete dependence on this
@@ -468,28 +469,32 @@ def plot_partial_dependence_with_uncertainty(
         color="black",
         color_samples="grey",
         alpha=None,
-        label=None
+        label=None,
+        ci_bounds=(0.025, 0.975)
 ):
     """
     Parameters
     ----------
     grid: np.array
-        Array of values of the feature for which the pdp values have been computed
+        Array of values of the feature for which the pdp values have been
+        computed
     predictions list[np.array]
-        List of predictions, one from each fold. Each array is shaped (num_holdout_samples_for_fold, size_of_grid)
+        List of predictions, one from each fold. Each array is shaped
+        (num_holdout_samples_for_fold, size_of_grid)
     feature_name: str
         The name of the feature
     """
 
-    # do we plot the uncertainty region in grey or a transparent version of the specified color
+    # do we plot the uncertainty region in grey or a transparent version of the
+    # specified color
     if alpha is None:
         alpha = 1
 
     if ax is not None:
         fig = None
         if density is not None:
-            raise ValueError("Plotting dependence with density requires subplots "
-                             "and cannot be added to existing axis.")
+            raise ValueError("Plotting dependence with density requires "
+                             "subplots and cannot be added to existing axis.")
 
     if ax is None:
         if density is not None:
@@ -542,22 +547,22 @@ def plot_partial_dependence_with_uncertainty(
         ax.plot(x, mu)
 
     elif mode == "derivative":
+        ax.set_title(f"{name} Derivative Partial Dependence: {feature_name}")
         p_all = np.vstack(predictions)
-        slope = np.diff(p_all, axis=1)
-        x = x[:-1]
+        gradient = np.gradient(p_all, x, axis=1)
         if categorical:
             tick_labels = list(zip(tick_labels, tick_labels[1:]))
             ax.set_xticks(x)
             ax.set_xticklabels(tick_labels)
 
-        x = grid[:-1]  # np.arange(slope.shape[1])#grid[1:]np.arange(slope.shape[1])
-        mu = slope.mean(axis=0)
-        s = slope.std(axis=0)
+        mu = gradient.mean(axis=0)
+        l, u = mquantiles(gradient, prob=ci_bounds, axis=0)
 
-        ax.fill_between(x, mu-s, mu+s, alpha=0.3)
-        ax.plot(x, mu)
+        ax.fill_between(x, l, u, alpha=0.3, label=f"CI: {ci_bounds}")
+        ax.plot(x, mu, label="mean derivative")
         ax.set_xlabel(f"{feature_name}")
         ax.set_ylabel("$\\Delta $prediction")
+        ax.legend()
 
     else:
         valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative"]

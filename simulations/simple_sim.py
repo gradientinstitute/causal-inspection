@@ -111,8 +111,11 @@ def main():
 
     # Casual estimation
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
+    pddeval = PartialDependanceEvaluator(feature_grids={"T": "auto"},
+                                         mode="derivative")
     pieval = PermutationImportanceEvaluator(n_repeats=5, ntop=5)
-    bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
+    bootstrap_model(best_model, X, Y, [pdeval, pddeval, pieval],
+                    replications=30)
 
     plt.show()
 
