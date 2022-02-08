@@ -1,7 +1,6 @@
-"""
-An example of dealing with collinearity in the confounders.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
-"""
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""An example of dealing with collinearity in the confounders."""
 
 import logging
 import numpy as np

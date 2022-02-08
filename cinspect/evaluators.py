@@ -1,7 +1,6 @@
-"""
-Result evaluator classes.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
-"""
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""Result evaluator classes."""
 
 import numpy as np
 from typing import NamedTuple, Union, Sequence, Any

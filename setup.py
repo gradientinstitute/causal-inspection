@@ -1,11 +1,11 @@
-"""
-Setup tools file for causal_inspection.
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""Setup tools file for causal_inspection.
+
 See:
 https://packaging.python.org/en/latest/distributing.html
 https://github.com/pypa/sampleproject
-Copyright (C) 2019-2021 Gradient Institute Ltd.
 """
-
 
 # To use a consistent encoding
 from codecs import open

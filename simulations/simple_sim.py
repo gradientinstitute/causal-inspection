@@ -1,7 +1,6 @@
-"""
-An example of how to use the causal inspection tools with simple models.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
-"""
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""Example of how to use the causal inspection tools with simple models."""
 
 import logging
 import numpy as np

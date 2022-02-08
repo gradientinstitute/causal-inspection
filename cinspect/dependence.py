@@ -1,13 +1,12 @@
-"""
-Partial dependence and individual conditional expectation functions.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
-"""
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""Partial dependence and individual conditional expectation functions."""
 
 import numbers
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from typing import Union, Any, List, Tuple, Optional, cast, Literal
+from typing import Any, List, Tuple, Optional, Literal
 from scipy.stats.mstats import mquantiles
 
 

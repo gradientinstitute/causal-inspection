@@ -1,7 +1,13 @@
-"""
-Permutation importance for estimators.
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+#
+# Original sklearn implementation copyright
+# Copyright (c) 2007-2021 The scikit-learn developers.
+# All rights reserved.
+# See LICENSE for the original license.
+"""Permutation importance for estimators.
+
 Adapted from sklearn to allow computation for only a subset of features.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
 """
 
 import numpy as np
@@ -47,26 +53,38 @@ def _check_feature_dict_valid(features):
                 raise ValueError("features must not be duplicated, even "
                                  f"under different groups, got:{features}")
             if type(f) != int:
-                raise ValueError(f"keys must map to lists of integers, got:{features}")
+                raise ValueError("keys must map to lists of integers, "
+                                 f"got:{features}")
             result.append(f)
 
 
 def _check_feature_list_valid(features):
     if not all((type(c) == int for c in features)):
-        error_msg = f"features must be supplied as a list must all be integers, got:{features}"
+        error_msg = "features must be supplied as a list must all be " \
+                    f"integers, got:{features}"
         raise ValueError(error_msg)
 
 
 def _flatten_feature_dict(features):
     result = []
-    for key, values in features.items():
+    for _, values in features.items():
         result.extend(values)
     return result
 
 
 @_deprecate_positional_args
-def permutation_importance(estimator, X, y,*, scoring=None, n_repeats=5,
-                           n_jobs=None, random_state=None, features=None, grouped=False):
+def permutation_importance(
+    estimator,
+    X,
+    y,
+    *,
+    scoring=None,
+    n_repeats=5,
+    n_jobs=None,
+    random_state=None,
+    features=None,
+    grouped=False
+):
     """Permutation importance for feature evaluation [BRE]_.
 
     The :term:`estimator` is required to be a fitted estimator. `X` can be the
@@ -154,13 +172,14 @@ def permutation_importance(estimator, X, y,*, scoring=None, n_repeats=5,
     >>> result.importances_std
     array([0.2211..., 0.       , 0.       ])
     """
-
     if not hasattr(X, "iloc"):
         X = check_array(X, force_all_finite="allow-nan", dtype=None)
 
     if grouped:
-        error_msg = "if grouped is true, features must be passed as a dictionary"
-        assert (hasattr(features, "keys") and hasattr(features, "values")), error_msg
+        error_msg = "if grouped is true, features must be passed as a " \
+            "dictionary"
+        assert (hasattr(features, "keys") and
+                hasattr(features, "values")), error_msg
         _check_feature_dict_valid(features)
 
     elif features is not None:

@@ -1,7 +1,6 @@
-"""
-Causal model evaluation functions.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
-"""
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""Causal model evaluation functions."""
 
 
 import time

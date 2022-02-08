@@ -1,8 +1,6 @@
-"""
-Test for the evaluators module.
-Copyright (C) 2019-2021 Gradient Institute Ltd.
-"""
-
+# Copyright (c) Gradient Institute. All rights reserved.
+# Licensed under the Apache 2.0 License.
+"""Test for the evaluators module."""
 
 from cinspect.evaluators import Evaluator, ScoreEvaluator
 
