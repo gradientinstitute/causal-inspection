@@ -550,10 +550,6 @@ def plot_partial_dependence_with_uncertainty(
         ax.set_title(f"{name} Derivative Partial Dependence: {feature_name}")
         p_all = np.vstack(predictions)
         gradient = np.gradient(p_all, x, axis=1)
-        if categorical:
-            tick_labels = list(zip(tick_labels, tick_labels[1:]))
-            ax.set_xticks(x)
-            ax.set_xticklabels(tick_labels)
 
         mu = gradient.mean(axis=0)
         l, u = mquantiles(gradient, prob=ci_bounds, axis=0)
