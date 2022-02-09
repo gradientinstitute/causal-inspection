@@ -8,7 +8,7 @@ import pandas as pd
 
 from scipy.special import expit
 
-from sklearn.linear_model import Ridge, LinearRegression
+from sklearn.linear_model import Ridge
 from sklearn.model_selection import (GridSearchCV, ShuffleSplit, RepeatedKFold,
                                      GroupKFold)
 from sklearn.kernel_approximation import RBFSampler
@@ -150,8 +150,8 @@ def main():
         # Casual estimation -- KFold
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
-        eval_model(mod, X, Y, [bteval],
-                   RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3))
+        kfold = RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3)
+        eval_model(mod, X, Y, [bteval], kfold)
         results[name]["KFold"] = (bteval.ate, bteval.ate_ste)
 
         # Casual estimation -- ShuffleSplit
@@ -168,13 +168,15 @@ def main():
 
     if "ridge_gs" in models:
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(ridge_gs, X, Y, [bteval], replications=replications, groups=True)
+        bootstrap_model(ridge_gs, X, Y, [bteval], replications=replications,
+                        groups=True)
         results["ridge_gs"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
     if "btr" in models:
         btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(btr, X, Y, [bteval], replications=replications, groups=True)
+        bootstrap_model(btr, X, Y, [bteval], replications=replications,
+                        groups=True)
         results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
     # Print results:

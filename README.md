@@ -27,6 +27,12 @@ Modules
   and testing the tools.
 
 
+Example Usage
+-------------
+
+TODO -- for now see the examples in the `simulations` folder.
+
+
 License
 -------
 

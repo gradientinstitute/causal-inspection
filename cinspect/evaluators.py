@@ -449,8 +449,8 @@ class PermutationImportanceEvaluator(Evaluator):
 
     def aggregate(self):
         self.samples = np.hstack(self.imprt_samples)
-        title = "Permutation Importance"
-        title = f"{self.name}-{title}"
+        name = self.name if self.name is not None else ""
+        title = f"{name} Permutation Importance"
         _plot_importance(self.samples, self.ntop, self.columns, title,
                          xlabel="Permutation Importance")
 
