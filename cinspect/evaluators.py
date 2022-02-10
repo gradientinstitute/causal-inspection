@@ -2,6 +2,7 @@
 # Licensed under the Apache 2.0 License.
 """Result evaluator classes."""
 
+import logging
 import numpy as np
 from typing import NamedTuple, Union, Sequence, Any
 from collections import defaultdict
@@ -12,6 +13,8 @@ from cinspect import dependence
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
 # from sklearn.base import check_random_state
+
+LOG = logging.getLogger(__name__)
 
 # TODO: Make aggregate functions store results internally, and not save
 # anything. If we want to save, we should have a separate save method, and not
@@ -146,7 +149,7 @@ class BinaryTreatmentEffect(Evaluator):
         self.ate_ste = np.std(self.ate_samples, ddof=1)
 
     def report(self):
-        print(f"Average treatment effect: {self.ate} (self.ate_ste)")
+        LOG.info(f"Average treatment effect: {self.ate} (self.ate_ste)")
 
 
 def _np_or_pd_fill_col(X, column, fill_val):

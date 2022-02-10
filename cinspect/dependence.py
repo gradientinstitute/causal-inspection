@@ -238,10 +238,11 @@ def plot_partial_dependence_with_uncertainty(
         The name of the feature
     mode: str
         One of -
-        multiple-pd-lines
-        derivative
-        interval
-        ice-mu-sd
+            multiple-pd-lines - a PD line for each sample of data
+            derivative - a derivative PD plot with mean and confidence
+                intervals.
+            interval - a PD plot with
+            ice-mu-sd
     """
 
     # do we plot the uncertainty region in grey or a transparent version of the

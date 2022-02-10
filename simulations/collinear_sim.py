@@ -99,7 +99,7 @@ def make_data():
 
 
 def load_synthetic_data():
-    data_file = "data/synthetic_data.csv"
+    data_file = "../data/synthetic_data.csv"
     data = pd.read_csv(data_file, index_col=0)
     data.drop(columns=["p(t=1)"], inplace=True)
 
@@ -113,9 +113,10 @@ def load_synthetic_data():
 def main():
     """Run the simulation."""
     alpha_range = np.logspace(-1, 4, 30)
-    replications = 100
+    replications = 20
 
-    X, Y = load_synthetic_data()
+    # X, Y = load_synthetic_data()
+    X, Y = make_data()
 
     # Get the effective rank of the data
     eff_r = effective_rank(X)
@@ -180,11 +181,11 @@ def main():
         results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
 
     # Print results:
-    print(f"True ATE: {TRUE_ATE:.3f}")
+    LOG.info(f"True ATE: {TRUE_ATE:.3f}")
     for name, methods in results.items():
-        print(name)
+        LOG.info(name)
         for method, res in methods.items():
-            print(f"  {method}: {res[0]:.3f} ({res[1]:.3f})")
+            LOG.info(f"  {method}: {res[0]:.3f} ({res[1]:.3f})")
 
 
 if __name__ == "__main__":
