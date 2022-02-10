@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from sklearn.base import BaseEstimator
 
-from cinspect.model_evaluation import eval_model, bootstrap_model
+from cinspect.model_evaluation import crossval_model, bootstrap_model
 from cinspect.evaluators import Evaluator
 
 
@@ -63,7 +63,7 @@ class _MockEvaluator(Evaluator):
         self.aggregate_call = True
 
 
-@pytest.mark.parametrize("eval_func", [eval_model, bootstrap_model])
+@pytest.mark.parametrize("eval_func", [crossval_model, bootstrap_model])
 def test_eval_function_calls(eval_func):
     """Test the model evaluator functions are being called correctly."""
     estimator = _MockEstimator()

@@ -14,7 +14,7 @@ from sklearn.model_selection import (GridSearchCV, ShuffleSplit, RepeatedKFold,
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.base import clone
 
-from cinspect.model_evaluation import bootstrap_model, eval_model
+from cinspect.model_evaluation import bootstrap_model, crossval_model
 from cinspect.evaluators import BinaryTreatmentEffect
 from cinspect.estimators import BinaryTreatmentRegressor
 from cinspect.dimension import effective_rank
@@ -152,13 +152,14 @@ def main():
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
         kfold = RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3)
-        eval_model(mod, X, Y, [bteval], kfold)
+        crossval_model(mod, X, Y, [bteval], kfold)
         results[name]["KFold"] = (bteval.ate, bteval.ate_ste)
 
         # Casual estimation -- ShuffleSplit
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
-        eval_model(mod, X, Y, [bteval], ShuffleSplit(n_splits=replications))
+        crossval_model(mod, X, Y, [bteval],
+                       ShuffleSplit(n_splits=replications))
         results[name]["ShuffleSplit"] = (bteval.ate, bteval.ate_ste)
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't

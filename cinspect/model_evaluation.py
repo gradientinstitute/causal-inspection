@@ -19,7 +19,7 @@ from cinspect.evaluators import Evaluator
 LOG = logging.getLogger(__name__)
 
 
-def eval_model(
+def crossval_model(
     estimator: BaseEstimator,
     X: pd.DataFrame,
     y: Union[pd.Series, pd.DataFrame],
