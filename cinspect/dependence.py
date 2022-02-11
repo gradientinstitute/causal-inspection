@@ -38,14 +38,6 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
     return pd.DataFrame(d)
 
 
-def norm_predictions(predictions):
-    """Normalise a set of predictions by subtracting the mean"""
-    result = []
-    for p in predictions:
-        result.append(p - p.mean())
-    return result
-
-
 def individual_conditional_expectation(model, X, feature, grid_values,
                                        predict_method=None):
     """
@@ -244,14 +236,13 @@ def plot_partial_dependence_with_uncertainty(
             interval - a PD plot with
             ice-mu-sd
     """
-
+    fig = None
     # do we plot the uncertainty region in grey or a transparent version of the
     # specified color
     if alpha is None:
         alpha = 1
 
     if ax is not None:
-        fig = None
         if density is not None:
             raise ValueError("Plotting dependence with density requires "
                              "subplots and cannot be added to existing axis.")

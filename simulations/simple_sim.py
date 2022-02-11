@@ -117,6 +117,10 @@ def main():
     bootstrap_model(best_model, X, Y, [pdeval, pddeval, pieval],
                     replications=30)
 
+    pdeval.get_results()
+    pddeval.get_results()
+    pieval.get_results()
+
     plt.show()
 
 
