@@ -109,13 +109,13 @@ def main():
     LOG.info(f"Best model R^2 = {model.best_score_:.3f}, alpha = {best_alpha}")
 
     # Casual estimation
-    pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"},
-                                        mode="interval")
-    pddeval = PartialDependanceEvaluator(feature_grids={"T": "auto"},
-                                         mode="derivative")
-    pieval = PermutationImportanceEvaluator(n_repeats=5, ntop=5)
-    bootstrap_model(best_model, X, Y, [pdeval, pddeval, pieval],
-                    replications=30)
+    pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
+    pieval = PermutationImportanceEvaluator(n_repeats=5)
+    bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
+
+    pdeval.get_results(mode="interval")
+    pdeval.get_results(mode="derivative")
+    pieval.get_results(ntop=5)
 
     plt.show()
 

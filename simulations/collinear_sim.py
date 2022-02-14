@@ -146,21 +146,21 @@ def main():
         # Casual estimation -- Bootstrap
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data
         bootstrap_model(mod, X, Y, [bteval], replications=replications)
-        results[name]["Bootstrap"] = (bteval.ate, bteval.ate_ste)
+        results[name]["Bootstrap"] = bteval.get_results()
 
         # Casual estimation -- KFold
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
         kfold = RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3)
         crossval_model(mod, X, Y, [bteval], kfold)
-        results[name]["KFold"] = (bteval.ate, bteval.ate_ste)
+        results[name]["KFold"] = bteval.get_results()
 
         # Casual estimation -- ShuffleSplit
         bteval = BinaryTreatmentEffect(treatment_column="T",
                                        evaluate_mode="test")
         crossval_model(mod, X, Y, [bteval],
                        ShuffleSplit(n_splits=replications))
-        results[name]["ShuffleSplit"] = (bteval.ate, bteval.ate_ste)
+        results[name]["ShuffleSplit"] = bteval.get_results()
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't
     # get common samples in the train and test folds
@@ -172,21 +172,21 @@ def main():
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(ridge_gs, X, Y, [bteval], replications=replications,
                         groups=True)
-        results["ridge_gs"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
+        results["ridge_gs"]["Bootstrap-group"] = bteval.get_results()
 
     if "btr" in models:
         btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(btr, X, Y, [bteval], replications=replications,
                         groups=True)
-        results["btr"]["Bootstrap-group"] = (bteval.ate, bteval.ate_ste)
+        results["btr"]["Bootstrap-group"] = bteval.get_results()
 
     # Print results:
     LOG.info(f"True ATE: {TRUE_ATE:.3f}")
     for name, methods in results.items():
         LOG.info(name)
         for method, res in methods.items():
-            LOG.info(f"  {method}: {res[0]:.3f} ({res[1]:.3f})")
+            LOG.info(f"  {method}: {res[0]:.3f} ({res[1]:.3f}, {res[2]:.3f})")
 
 
 if __name__ == "__main__":

@@ -4,15 +4,15 @@
 
 import logging
 import numpy as np
-from typing import NamedTuple, Union, Sequence, Any
-from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
-from cinspect import importance
-from cinspect import dependence
+from typing import NamedTuple, Union, Sequence, Any
+from collections import defaultdict
+from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
-# from sklearn.base import check_random_state
+from cinspect import importance
+from cinspect import dependence
 
 LOG = logging.getLogger(__name__)
 
@@ -25,23 +25,46 @@ class Evaluator:
     """Abstract class for Evaluators to inherit from."""
 
     def prepare(self, estimator, X, y=None, random_state=None):
-        """Prepare the evaluator with model and data information."""
+        """Prepare the evaluator with model and data information.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         pass
 
     def evaluate_test(self, estimator, X=None, y=None):
-        """Evaluate the fitted estimator with test data."""
+        """Evaluate the fitted estimator with test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         pass
 
     def evaluate_train(self, estimator, X, y):
-        """Evaluate the fitted estimator with training data."""
+        """Evaluate the fitted estimator with training data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         pass
 
     def evaluate_all(self, estimator, X, y=None):
-        """Evaluate the fitted estimator with training and test data."""
+        """Evaluate the fitted estimator with training and test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         pass
 
     def aggregate(self):
-        """Aggregate the evaluation results."""
+        """Aggregate the evaluation results.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
+        pass
+
+    def get_results(self):
+        """Get the results from the evaluator.
+
+        This could be a pandas dataframe, a matplotlib figure, etc.
+        This is called by the end user explicitly.
+        """
         pass
 
 
@@ -84,8 +107,10 @@ class ScoreEvaluator(Evaluator):
             for s_name, s in self.scorers.items():
                 self.scores[s_name].append(s(estimator, X, y))
 
-    def aggregate(self):
-        self.scores = pd.DataFrame(self.scores)
+    def get_results(self):
+        """Get the scores of the estimator."""
+        dfscores = pd.DataFrame(self.scores)
+        return dfscores
 
 
 class BinaryTreatmentEffect(Evaluator):
@@ -144,20 +169,29 @@ class BinaryTreatmentEffect(Evaluator):
         if self.evaluate_mode == "test":
             self._evaluate(estimator, X, y)
 
-    def aggregate(self):
-        self.ate = np.mean(self.ate_samples)
-        self.ate_ste = np.std(self.ate_samples, ddof=1)
+    def get_results(self, ci_probs=(0.025, 0.975)):
+        """Get the statistics of the ATE.
 
-    def report(self):
-        LOG.info(f"Average treatment effect: {self.ate} (self.ate_ste)")
+        Parameters
+        ----------
+        ci_probs: tuple (optional)
+            A sequence of confidence intervals/quantiles to compute from the
+            ATE samples. These must be in [0, 1].
 
-
-def _np_or_pd_fill_col(X, column, fill_val):
-    if isinstance(X, pd.DataFrame):
-        X[column] = fill_val
-    else:
-        X[:, column] = fill_val
-    return X
+        Returns
+        -------
+        mean_ate: float
+            The mean of the ATE samples.
+        *ci_levels: sequence
+            A sequence of confidence interval levels as specified by
+            `ci_probs`.
+        """
+        for p in ci_probs:
+            if p < 0 or p > 1:
+                raise ValueError("ci_probs must be in range [0, 1].")
+        mean_ate = np.mean(self.ate_samples)
+        ci_levels = mquantiles(self.ate_samples, ci_probs)
+        return mean_ate, *ci_levels
 
 
 class Dependance(NamedTuple):
@@ -193,32 +227,21 @@ class PartialDependanceEvaluator(Evaluator):
 
     def __init__(
         self,
-        mode="multiple-pd-lines",
-        end_transform_indx=None,
         feature_grids=None,
+        evaluate_mode="all",
         conditional_filter=None,
         filter_name=None,
-        evaluate_mode="all",
-        color="black",
-        color_samples="grey",
-        pd_alpha=None,
-        ci_bounds=(0.025, 0.975)
+        end_transform_indx=None
     ):
         """Construct a PartialDependanceEvaluator."""
-        self.mode = mode
-        self.end_transform_indx = end_transform_indx
-        self.feature_grids = feature_grids  # optional map from feature_name to grid for that feature.
-        self.conditional_filter = conditional_filter  # callable for filtering X
-        self.filter_name = filter_name
-        valid_evaluate_modes = ["all", "test", "train"]
+        self.feature_grids = feature_grids
+        valid_evaluate_modes = ("all", "test", "train")
         assert evaluate_mode in valid_evaluate_modes, \
             f"evaluate_mode must be in {valid_evaluate_modes}"
         self.evaluate_mode = evaluate_mode
-        self.pd_alpha = pd_alpha
-        self.color = color
-        self.color_samples = color_samples
-        self.ci_bounds = ci_bounds
-
+        self.conditional_filter = conditional_filter  # callable for filtering X
+        self.filter_name = filter_name
+        self.end_transform_indx = end_transform_indx
 
     def prepare(self, estimator, X, y, random_state=None):
         # random_state = check_random_state(random_state)
@@ -293,6 +316,7 @@ class PartialDependanceEvaluator(Evaluator):
         for feature_name, params in self.dep_params.items():
             if feature_name not in Xt.columns:
                 raise RuntimeError(f"{feature_name} not in X!")
+
             feature_indx = Xt.columns.get_loc(feature_name)
             if params.valid:
                 grid = params.grid
@@ -304,24 +328,35 @@ class PartialDependanceEvaluator(Evaluator):
                 )
                 params.predictions.append(ice)
 
-    def aggregate(self):
+    def get_results(
+        self,
+        mode="multiple-pd-lines",
+        color="black",
+        color_samples="grey",
+        pd_alpha=None,
+        ci_bounds=(0.025, 0.975)
+    ):
+        figs = []
         for dep in self.dep_params.values():
             if dep.valid:
                 fname = dep.feature_name
                 if self.filter_name is not None:
                     fname = fname + f", filtered by: {self.filter_name}"
-                dependence.plot_partial_dependence_with_uncertainty(
+                fig = dependence.plot_partial_dependence_with_uncertainty(
                     dep.grid, dep.predictions, fname,
                     density=dep.density,
                     categorical=dep.categorical,
-                    mode=self.mode,
-                    color=self.color,
-                    color_samples=self.color_samples,
-                    alpha=self.pd_alpha,
-                    ci_bounds=self.ci_bounds
+                    mode=mode,
+                    color=color,
+                    color_samples=color_samples,
+                    alpha=pd_alpha,
+                    ci_bounds=ci_bounds
                 )
+                figs.append(fig)
             else:
-                print(f"Feature {dep.feature_name} is all nan, nothing to plot.")
+                raise RuntimeError(f"Feature {dep.feature_name} is all nan,"
+                                   "nothing to plot.")
+        return figs
 
 
 class PermutationImportanceEvaluator(Evaluator):
@@ -353,12 +388,10 @@ class PermutationImportanceEvaluator(Evaluator):
     def __init__(
         self,
         n_repeats=10,
-        ntop=10,
         features=None,
         end_transform_indx=None,
         grouped=False,
-        name=None,
-        scorer="r2"
+        scorer=None
     ):
         """Construct a permutation importance evaluator."""
         if not grouped and hasattr(features, "values"):  # flatten the dict if not grouped
@@ -368,18 +401,18 @@ class PermutationImportanceEvaluator(Evaluator):
             features = result
 
         if grouped and not hasattr(features, "values"):
-            raise ValueError("If features should be grouped they must be specified as a dictionary.")
+            raise ValueError("If features should be grouped they must be "
+                             "specified as a dictionary.")
 
-        if grouped and hasattr(features, "values"):  # grouped and passed a dict
-            features = {key: value for key, value in features.items() if len(value) > 0}
+        if grouped and hasattr(features, "values"):  # grouped and passed dict
+            features = {key: value for key, value in features.items()
+                        if len(value) > 0}
 
         self.n_repeats = n_repeats
         self.imprt_samples = []
-        self.ntop = ntop
         self.features = features
         self.end_transform_indx = end_transform_indx
         self.grouped = grouped
-        self.name = name
         self.scorer = scorer
 
     def prepare(
@@ -387,7 +420,7 @@ class PermutationImportanceEvaluator(Evaluator):
             estimator,
             X,
             y=None,
-            random_state=42
+            random_state=None
     ):
         if self.end_transform_indx is not None:
             transformer = clone(estimator[0:self.end_transform_indx])
@@ -395,12 +428,14 @@ class PermutationImportanceEvaluator(Evaluator):
 
         if self.grouped:
             self.columns = list(self.features.keys())
-            if all((type(c) == int for cols in self.features.values() for c in cols)):
+            if all((type(c) == int for cols in self.features.values()
+                    for c in cols)):
                 self.feature_indices = self.features
                 self.col_by_name = False
-            elif all((type(c) == str for cols in self.features.values() for c in cols)):
+            elif all((type(c) == str for cols in self.features.values()
+                      for c in cols)):
                 self.feature_indices = {
-                    group_key: get_column_indices_and_names(X, columns)[0]
+                    group_key: _get_column_indices_and_names(X, columns)[0]
                     for (group_key, columns) in self.features.items()
                 }
                 self.col_by_name = True
@@ -410,7 +445,7 @@ class PermutationImportanceEvaluator(Evaluator):
 
         else:
             self.feature_indices, self.columns, self.col_by_name = \
-                get_column_indices_and_names(X, self.features)
+                _get_column_indices_and_names(X, self.features)
 
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
@@ -450,15 +485,20 @@ class PermutationImportanceEvaluator(Evaluator):
 
         self.imprt_samples.append(imprt.importances)
 
-    def aggregate(self):
-        self.samples = np.hstack(self.imprt_samples)
-        name = self.name if self.name is not None else ""
-        title = f"{name} Permutation Importance"
-        _plot_importance(self.samples, self.ntop, self.columns, title,
-                         xlabel="Permutation Importance")
+    def get_results(
+        self,
+        ntop=10,
+        name=None
+    ):
+        samples = np.hstack(self.imprt_samples)
+        name = name + " " if name is not None else ""
+        title = f"{name}Permutation Importance"
+        fig = _plot_importance(samples, ntop, self.columns, title,
+                               xlabel="Permutation Importance")
+        return fig
 
 
-def get_column_indices_and_names(X, columns=None):
+def _get_column_indices_and_names(X, columns=None):
     """
     Return the indicies and names of the specified columns as a list.
 
@@ -521,6 +561,10 @@ def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
     if xlabel is not None:
         ax.set_xlabel(xlabel)
 
+    return fig
+
+
+# TODO: these are prime candidates for multiple dispatch
 
 def _check_feature_indices(feature_indices, col_by_name, columns, Xt,
                            n_expected_columns):
@@ -539,3 +583,11 @@ def _check_feature_indices(feature_indices, col_by_name, columns, Xt,
                              f"{n_expected_columns}->{Xt.shape[1]}")
 
     return feature_indices
+
+
+def _np_or_pd_fill_col(X, column, fill_val):
+    if isinstance(X, pd.DataFrame):
+        X[column] = fill_val
+    else:
+        X[:, column] = fill_val
+    return X
