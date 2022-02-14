@@ -227,31 +227,21 @@ class PartialDependanceEvaluator(Evaluator):
 
     def __init__(
         self,
-        mode="multiple-pd-lines",
-        end_transform_indx=None,
         feature_grids=None,
+        evaluate_mode="all",
         conditional_filter=None,
         filter_name=None,
-        evaluate_mode="all",
-        color="black",
-        color_samples="grey",
-        pd_alpha=None,
-        ci_bounds=(0.025, 0.975)
+        end_transform_indx=None
     ):
         """Construct a PartialDependanceEvaluator."""
-        self.mode = mode
-        self.end_transform_indx = end_transform_indx
-        self.feature_grids = feature_grids  # optional map from feature_name to grid for that feature.
-        self.conditional_filter = conditional_filter  # callable for filtering X
-        self.filter_name = filter_name
-        valid_evaluate_modes = ["all", "test", "train"]
+        self.feature_grids = feature_grids
+        valid_evaluate_modes = ("all", "test", "train")
         assert evaluate_mode in valid_evaluate_modes, \
             f"evaluate_mode must be in {valid_evaluate_modes}"
         self.evaluate_mode = evaluate_mode
-        self.pd_alpha = pd_alpha
-        self.color = color
-        self.color_samples = color_samples
-        self.ci_bounds = ci_bounds
+        self.conditional_filter = conditional_filter  # callable for filtering X
+        self.filter_name = filter_name
+        self.end_transform_indx = end_transform_indx
 
     def prepare(self, estimator, X, y, random_state=None):
         # random_state = check_random_state(random_state)
@@ -326,6 +316,7 @@ class PartialDependanceEvaluator(Evaluator):
         for feature_name, params in self.dep_params.items():
             if feature_name not in Xt.columns:
                 raise RuntimeError(f"{feature_name} not in X!")
+
             feature_indx = Xt.columns.get_loc(feature_name)
             if params.valid:
                 grid = params.grid
@@ -337,10 +328,14 @@ class PartialDependanceEvaluator(Evaluator):
                 )
                 params.predictions.append(ice)
 
-    def get_results(self):
-        # TODO: put the figure options in here instead of in the class
-        # constructor!! This means we don't have to run multiple PD plotting
-        # classes!!!
+    def get_results(
+        self,
+        mode="multiple-pd-lines",
+        color="black",
+        color_samples="grey",
+        pd_alpha=None,
+        ci_bounds=(0.025, 0.975)
+    ):
         figs = []
         for dep in self.dep_params.values():
             if dep.valid:
@@ -351,11 +346,11 @@ class PartialDependanceEvaluator(Evaluator):
                     dep.grid, dep.predictions, fname,
                     density=dep.density,
                     categorical=dep.categorical,
-                    mode=self.mode,
-                    color=self.color,
-                    color_samples=self.color_samples,
-                    alpha=self.pd_alpha,
-                    ci_bounds=self.ci_bounds
+                    mode=mode,
+                    color=color,
+                    color_samples=color_samples,
+                    alpha=pd_alpha,
+                    ci_bounds=ci_bounds
                 )
                 figs.append(fig)
             else:
@@ -393,12 +388,10 @@ class PermutationImportanceEvaluator(Evaluator):
     def __init__(
         self,
         n_repeats=10,
-        ntop=10,
         features=None,
         end_transform_indx=None,
         grouped=False,
-        name=None,
-        scorer="r2"
+        scorer=None
     ):
         """Construct a permutation importance evaluator."""
         if not grouped and hasattr(features, "values"):  # flatten the dict if not grouped
@@ -408,18 +401,18 @@ class PermutationImportanceEvaluator(Evaluator):
             features = result
 
         if grouped and not hasattr(features, "values"):
-            raise ValueError("If features should be grouped they must be specified as a dictionary.")
+            raise ValueError("If features should be grouped they must be "
+                             "specified as a dictionary.")
 
-        if grouped and hasattr(features, "values"):  # grouped and passed a dict
-            features = {key: value for key, value in features.items() if len(value) > 0}
+        if grouped and hasattr(features, "values"):  # grouped and passed dict
+            features = {key: value for key, value in features.items()
+                        if len(value) > 0}
 
         self.n_repeats = n_repeats
         self.imprt_samples = []
-        self.ntop = ntop
         self.features = features
         self.end_transform_indx = end_transform_indx
         self.grouped = grouped
-        self.name = name
         self.scorer = scorer
 
     def prepare(
@@ -427,7 +420,7 @@ class PermutationImportanceEvaluator(Evaluator):
             estimator,
             X,
             y=None,
-            random_state=42
+            random_state=None
     ):
         if self.end_transform_indx is not None:
             transformer = clone(estimator[0:self.end_transform_indx])
@@ -435,10 +428,12 @@ class PermutationImportanceEvaluator(Evaluator):
 
         if self.grouped:
             self.columns = list(self.features.keys())
-            if all((type(c) == int for cols in self.features.values() for c in cols)):
+            if all((type(c) == int for cols in self.features.values()
+                    for c in cols)):
                 self.feature_indices = self.features
                 self.col_by_name = False
-            elif all((type(c) == str for cols in self.features.values() for c in cols)):
+            elif all((type(c) == str for cols in self.features.values()
+                      for c in cols)):
                 self.feature_indices = {
                     group_key: _get_column_indices_and_names(X, columns)[0]
                     for (group_key, columns) in self.features.items()
@@ -490,14 +485,15 @@ class PermutationImportanceEvaluator(Evaluator):
 
         self.imprt_samples.append(imprt.importances)
 
-    def get_results(self):
-        # TODO: put the figure options in here instead of in the class
-        # constructor!! This means we don't have to run multiple PD plotting
-        # classes!!!
+    def get_results(
+        self,
+        ntop=10,
+        name=None
+    ):
         samples = np.hstack(self.imprt_samples)
-        name = self.name if self.name is not None else ""
-        title = f"{name} Permutation Importance"
-        fig = _plot_importance(samples, self.ntop, self.columns, title,
+        name = name + " " if name is not None else ""
+        title = f"{name}Permutation Importance"
+        fig = _plot_importance(samples, ntop, self.columns, title,
                                xlabel="Permutation Importance")
         return fig
 
