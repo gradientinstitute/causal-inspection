@@ -278,6 +278,7 @@ def plot_partial_dependence_with_uncertainty(
 
     ax.set_ylabel("prediction")
     ax.set_title(f"{name} Partial Dependence: {feature_name}")
+    ax.grid(True)
     if ax.get_xlabel() is None:
         ax.set_xlabel(feature_name)
 
