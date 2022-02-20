@@ -71,8 +71,6 @@ def crossval_model(
 
     LOG.info("Validation done.")
 
-    for ev in evaluators_:
-        ev.aggregate()
 
     return evaluators_
 
@@ -137,8 +135,5 @@ def bootstrap_model(
         LOG.info(f"... iteration time {end - start:.2f}s")
 
     LOG.info("Bootstrapping done.")
-
-    for ev in evaluators_:
-        ev.aggregate()
 
     return evaluators_

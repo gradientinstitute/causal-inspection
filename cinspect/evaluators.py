@@ -52,13 +52,6 @@ class Evaluator:
         """
         pass
 
-    def aggregate(self):
-        """Aggregate the evaluation results.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        pass
-
     def get_results(self):
         """Get the results from the evaluator.
 
