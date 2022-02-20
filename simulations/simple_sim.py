@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from functools import partial
 
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
@@ -109,13 +110,13 @@ def main():
     LOG.info(f"Best model R^2 = {model.best_score_:.3f}, alpha = {best_alpha}")
 
     # Casual estimation
-    pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
-    pieval = PermutationImportanceEvaluator(n_repeats=5)
-    bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
+    pdeval = partial(PartialDependanceEvaluator, feature_grids={"T": "auto"})
+    pieval = partial(PermutationImportanceEvaluator, n_repeats=5)
+    [pdeval_fitted, pieval_fitted] = bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
 
-    pdeval.get_results(mode="interval")
-    pdeval.get_results(mode="derivative")
-    pieval.get_results(ntop=5)
+    pdeval_fitted.get_results(mode="interval")
+    pdeval_fitted.get_results(mode="derivative")
+    pieval_fitted.get_results(ntop=5)
 
     plt.show()
 
