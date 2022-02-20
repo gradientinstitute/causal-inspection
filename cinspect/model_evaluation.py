@@ -41,8 +41,12 @@ def crossval_model(
 
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
+    evaluators_ = []
+
     for ev in evaluators:
-        ev.prepare(estimator, X, y, random_state=random_state)
+        evaluators_.append(
+                ev(estimator, X, y, random_state=random_state)
+                )
 
     LOG.info("Validating ...")
 
@@ -58,7 +62,7 @@ def crossval_model(
         else:
             ys, yr = y[sind], y[rind]
         estimator.fit(Xr, yr)  # training data
-        for ev in evaluators:
+        for ev in evaluators_:
             ev.evaluate_test(estimator, Xs, ys)
             ev.evaluate_train(estimator, Xr, yr)
             ev.evaluate_all(estimator, X, y)
@@ -67,17 +71,17 @@ def crossval_model(
 
     LOG.info("Validation done.")
 
-    for ev in evaluators:
+    for ev in evaluators_:
         ev.aggregate()
 
-    return evaluators
+    return evaluators_
 
 
 def bootstrap_model(
     estimator: BaseEstimator,
     X: pd.DataFrame,
     y: Union[pd.DataFrame, pd.Series],
-    evaluators: Sequence[Evaluator],
+    evaluators: Sequence[Evaluator], # TODO; now a constructor... typing gets gross here
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     groups: bool = False
@@ -103,8 +107,12 @@ def bootstrap_model(
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
     random_state = check_random_state(random_state)
+    # Finish constructing the evaluators by passing in the current estimator and data
+    evaluators_ = []
     for ev in evaluators:
-        ev.prepare(estimator, X, y, random_state=random_state)
+        evaluators_.append(
+                ev(estimator=estimator, X=X, y=y, random_state=random_state)
+                )
 
     LOG.info("Bootstrapping ...")
 
@@ -121,7 +129,7 @@ def bootstrap_model(
         else:
             estimator.fit(Xb, yb)
 
-        for ev in evaluators:
+        for ev in evaluators_:
             ev.evaluate_train(estimator, Xb, yb)
             ev.evaluate_test(estimator, Xb, yb)
             ev.evaluate_all(estimator, Xb, yb)
@@ -130,7 +138,7 @@ def bootstrap_model(
 
     LOG.info("Bootstrapping done.")
 
-    for ev in evaluators:
+    for ev in evaluators_:
         ev.aggregate()
 
-    return evaluators
+    return evaluators_

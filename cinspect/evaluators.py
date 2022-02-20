@@ -430,7 +430,7 @@ class PermutationImportanceEvaluator(Evaluator):
         self.grouped = grouped
         self.scorer = scorer
 
-        self._prepare(X,y,random_state=random_state)
+        self._prepare(estimator=estimator, X=X, y=y,random_state=random_state)
 
     def _prepare(
             self,
