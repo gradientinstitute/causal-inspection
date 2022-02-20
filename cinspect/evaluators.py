@@ -24,7 +24,7 @@ LOG = logging.getLogger(__name__)
 class Evaluator:
     """Abstract class for Evaluators to inherit from."""
 
-    def prepare(self, estimator, X, y=None, random_state=None):
+    def _prepare(self, estimator, X, y=None, random_state=None):
         """Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
@@ -125,6 +125,10 @@ class BinaryTreatmentEffect(Evaluator):
 
     def __init__(
         self,
+        estimator,
+        X,
+        y,
+        random_state=None,
         treatment_column: Union[str, int],
         treatment_val: Any = 1,
         control_val: Any = 0,
@@ -136,7 +140,9 @@ class BinaryTreatmentEffect(Evaluator):
         self.evaluate_mode = evaluate_mode
         self.ate_samples = []
 
-    def prepare(self, estimator, X, y, random_state=None):
+        self._prepare(self, esimator, X,y,random_state)
+
+    def _prepare(self, estimator, X, y, random_state=None):
         T = X[self.treatment_column]
         assert self.treatment_val in T
         assert self.control_val in T
@@ -227,6 +233,10 @@ class PartialDependanceEvaluator(Evaluator):
 
     def __init__(
         self,
+        estimator,
+        X,
+        y,
+        random_state=None
         feature_grids=None,
         evaluate_mode="all",
         conditional_filter=None,
@@ -242,8 +252,9 @@ class PartialDependanceEvaluator(Evaluator):
         self.conditional_filter = conditional_filter  # callable for filtering X
         self.filter_name = filter_name
         self.end_transform_indx = end_transform_indx
+        self._prepare(estimator=estimator, X=X, y=y, random_state=random_state)
 
-    def prepare(self, estimator, X, y, random_state=None):
+    def _prepare(self, estimator, X, y, random_state=None):
         # random_state = check_random_state(random_state)
         if self.end_transform_indx is not None:
             # we use the X, y information only to select the values over which
@@ -387,6 +398,10 @@ class PermutationImportanceEvaluator(Evaluator):
 
     def __init__(
         self,
+        estimator,
+        X,
+        y=None,
+        random_state=None,
         n_repeats=10,
         features=None,
         end_transform_indx=None,
@@ -415,7 +430,9 @@ class PermutationImportanceEvaluator(Evaluator):
         self.grouped = grouped
         self.scorer = scorer
 
-    def prepare(
+        self._prepare(X,y,random_state=random_state)
+
+    def _prepare(
             self,
             estimator,
             X,
