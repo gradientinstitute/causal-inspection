@@ -128,11 +128,11 @@ class BinaryTreatmentEffect(Evaluator):
         estimator,
         X,
         y,
-        random_state=None,
         treatment_column: Union[str, int],
         treatment_val: Any = 1,
         control_val: Any = 0,
-        evaluate_mode: str = "all"
+        evaluate_mode: str = "all",
+        random_state=None
     ):
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
@@ -236,7 +236,7 @@ class PartialDependanceEvaluator(Evaluator):
         estimator,
         X,
         y,
-        random_state=None
+        random_state=None,
         feature_grids=None,
         evaluate_mode="all",
         conditional_filter=None,
