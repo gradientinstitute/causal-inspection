@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from typing import NamedTuple, Union, Sequence, Any, TypeVar
 from collections import defaultdict
 import functools
+import operator
 from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
@@ -57,13 +58,12 @@ class Evaluator:
         pass
 
     @staticmethod
-    def combine(self, evaluations: Sequence[Evaluation]) -> Evaluation:
+    def combine(evaluations: Sequence[Evaluation]) -> Evaluation:
         """
         Aggregate multiple evaluations to make a single evaluation
         """
         pass 
-    # @staticmethod
-    # def view(self, evaluation: Evaluation) -> Any:
+    # def view_results(self, evaluation: Evaluation) -> Any:
     #     """
     #     Project an evaluation to a particular space; could be useful if there's a natural
     #     user-facing view of the results
@@ -109,19 +109,11 @@ class ScoreEvaluator(Evaluator):
             for s_name, s in self.scorers.items():
                 scores[s_name].append(s(estimator, X, y))
         return scores
-    @classmethod
-    def _combine_two_scores(scores1, scores2):
-        # merge two scores dictionaries (concatenating key clashes)
-        merged = { 
-                key: scores1[key] + scores2[key] 
-                for key in set(scores1.keys() + scores2.keys())]
-        }
-        return merged
-
-    @classmethod
+    
+    @staticmethod
     def combine(scores):
         # merge score dictionaries, concatenating elements with duplicate keys
-       combined_scores = functools.reduce(_combine_two_scores, scores)
+       combined_scores = functools.reduce(_merge_dicts_by_concatting, scores)
        return combined_scores
         
 
@@ -190,13 +182,13 @@ class BinaryTreatmentEffect(Evaluator):
     def evaluate_test(self, estimator, X, y):
         if self.evaluate_mode == "test":
             return self._evaluate(estimator, X, y)
-    @classmethod
-    def combine(ate_samples : Sequence(np.array)) -> np.array:
+    @staticmethod
+    def combine(ate_samples : Sequence[np.array]) -> np.array:
         # concatenate list of scores
         combined_scores = functools.reduce(operator.add, ate_samples)
-        combined_scores
+        return combined_scores
 
-    @classmethod
+    @staticmethod
     def get_results(ate_samples : np.array, ci_probs=(0.025, 0.975)):
         """Get the statistics of the ATE.
 
@@ -323,15 +315,15 @@ class PartialDependanceEvaluator(Evaluator):
 
     def evaluate_all(self, estimator, X, y=None):
         if self.evaluate_mode == "all":
-            self._evaluate(estimator, X, y)
+            return self._evaluate(estimator, X, y)
 
     def evaluate_train(self, estimator, X, y=None):
         if self.evaluate_mode == "train":
-            self._evaluate(estimator, X, y)
+            return self._evaluate(estimator, X, y)
 
     def evaluate_test(self, estimator, X, y=None):
         if self.evaluate_mode == "test":
-            self._evaluate(estimator, X, y)
+            return self._evaluate(estimator, X, y)
 
     def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
         if self.end_transform_indx is not None:
@@ -346,6 +338,7 @@ class PartialDependanceEvaluator(Evaluator):
         if self.conditional_filter is not None:
             Xt = self.conditional_filter(Xt)
 
+        param_predictions = defaultdict(list)
         for feature_name, params in self.dep_params.items():
             if feature_name not in Xt.columns:
                 raise RuntimeError(f"{feature_name} not in X!")
@@ -359,10 +352,19 @@ class PartialDependanceEvaluator(Evaluator):
                     feature_indx,
                     grid
                 )
-                params.predictions.append(ice)
+                # Only previous mutation
+                # params.predictions.append(ice)
+                param_predictions[feature_name].append(ice)
+        # breakpoint()
+        return param_predictions
+    @staticmethod
+    def combine(param_predictions_dicts : Sequence[dict[str, np.array]]) -> dict[str,np.array]:
+        combined_predictions = functools.reduce(_merge_dicts_by_concatting, param_predictions_dicts)
+        return combined_predictions
 
-    def get_results(
+    def view_results(
         self,
+        predictions_dict,
         mode="multiple-pd-lines",
         color="black",
         color_samples="grey",
@@ -370,13 +372,13 @@ class PartialDependanceEvaluator(Evaluator):
         ci_bounds=(0.025, 0.975)
     ):
         figs = []
-        for dep in self.dep_params.values():
+        for dep_name, dep in self.dep_params.items():
             if dep.valid:
                 fname = dep.feature_name
                 if self.filter_name is not None:
                     fname = fname + f", filtered by: {self.filter_name}"
                 fig = dependence.plot_partial_dependence_with_uncertainty(
-                    dep.grid, dep.predictions, fname,
+                    dep.grid, predictions_dict[dep_name], fname,
                     density=dep.density,
                     categorical=dep.categorical,
                     mode=mode,
@@ -495,6 +497,7 @@ class PermutationImportanceEvaluator(Evaluator):
             Xt = transformer.transform(X)
             predictor = estimator[self.end_transform_indx:]
 
+
         else:
             predictor = estimator
             Xt = X
@@ -521,15 +524,20 @@ class PermutationImportanceEvaluator(Evaluator):
                 features=feature_indices,  # if grouped {str:[int]}
                 grouped=self.grouped
             )
+        return imprt.importances
+        # self.imprt_samples.append(imprt.importances)
+    @staticmethod
+    def combine (importances_list : Sequence[np.array]) -> np.array :
+        importances_combined = np.hstack(importances_list)
+        return importances_combined
 
-        self.imprt_samples.append(imprt.importances)
-
-    def get_results(
+    def view_results(
         self,
+        results,
         ntop=10,
         name=None
     ):
-        samples = np.hstack(self.imprt_samples)
+        samples = results
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"
         fig = _plot_importance(samples, ntop, self.columns, title,
@@ -602,6 +610,14 @@ def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
 
     return fig
 
+
+# Helper to merge two dicts of lists by appending clashes
+def _merge_dicts_by_concatting(dict1 , dict2):
+    merged = { 
+            key: dict1[key] + dict2[key] 
+            for key in set(dict1.keys() + dict2.keys())
+    }
+    return merged
 
 # TODO: these are prime candidates for multiple dispatch
 

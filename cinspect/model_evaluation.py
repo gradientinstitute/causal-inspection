@@ -8,13 +8,13 @@ import logging
 import numpy as np
 import pandas as pd
 
-from typing import Union, Optional, Sequence
+from typing import Union, Optional, Sequence, Tuple
 from sklearn.model_selection import KFold
 from sklearn.utils import resample, check_random_state
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import BaseCrossValidator
 
-from cinspect.evaluators import Evaluator
+from cinspect.evaluators import Evaluator, Evaluation
 
 LOG = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def bootstrap_model(
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     groups: bool = False
-) -> Sequence[Evaluator]:
+) -> Sequence[Tuple[Evaluator, Evaluation]]:
     """
     Retrain a model using bootstrap re-sampling.
 
@@ -127,13 +127,21 @@ def bootstrap_model(
         else:
             estimator.fit(Xb, yb)
 
+        results = []
         for ev in evaluators_:
-            ev.evaluate_train(estimator, Xb, yb)
-            ev.evaluate_test(estimator, Xb, yb)
-            ev.evaluate_all(estimator, Xb, yb)
+            train_results = ev.evaluate_train(estimator, Xb, yb)
+            test_results = ev.evaluate_test(estimator, Xb, yb)
+            all_results = ev.evaluate_all(estimator, Xb, yb)
+            # a bit of a workaround; suboptimal
+            train_results = [train_results] if train_results is not None else []
+            test_results = [test_results] if test_results is not None else []
+            all_results = [all_results] if all_results is not None else []
+            # breakpoint()
+            ev_results = ev.combine(train_results + test_results + all_results)
+            results.append(ev_results)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
 
     LOG.info("Bootstrapping done.")
 
-    return evaluators_
+    return zip(evaluators_, results)
