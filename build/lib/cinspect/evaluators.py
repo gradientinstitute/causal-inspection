@@ -6,9 +6,8 @@ import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import NamedTuple, Union, Sequence, Any, TypeVar
+from typing import NamedTuple, Union, Sequence, Any
 from collections import defaultdict
-import functools
 from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
@@ -21,9 +20,6 @@ LOG = logging.getLogger(__name__)
 # anything. If we want to save, we should have a separate save method, and not
 # produce side-effects.
 
-# An evaluation is the data produced by a evaluator. Can be anything, as long as it
-# is consistent within an instance of the Evaluator type
-Evaluation = TypeVar('Evaluation')
 
 class Evaluator:
     """Abstract class for Evaluators to inherit from."""
@@ -35,40 +31,43 @@ class Evaluator:
         """
         pass
 
-    def evaluate_test(self, estimator, X=None, y=None) -> Evaluation:
+    def evaluate_test(self, estimator, X=None, y=None):
         """Evaluate the fitted estimator with test data.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    def evaluate_train(self, estimator, X, y) -> Evaluation:
+    def evaluate_train(self, estimator, X, y):
         """Evaluate the fitted estimator with training data.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    def evaluate_all(self, estimator, X, y=None) -> Evaluation:
+    def evaluate_all(self, estimator, X, y=None):
         """Evaluate the fitted estimator with training and test data.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    @staticmethod
-    def combine(self, evaluations: Sequence[Evaluation]) -> Evaluation:
+    def aggregate(self):
+        """Aggregate the evaluation results.
+
+        This is called by a model evaluation function in model_evaluation.
         """
-        Aggregate multiple evaluations to make a single evaluation
+        pass
+
+    def get_results(self):
+        """Get the results from the evaluator.
+
+        This could be a pandas dataframe, a matplotlib figure, etc.
+        This is called by the end user explicitly.
         """
-        pass 
-    # @staticmethod
-    # def view(self, evaluation: Evaluation) -> Any:
-    #     """
-    #     Project an evaluation to a particular space; could be useful if there's a natural
-    #     user-facing view of the results
-    #     """
-    #     return evaluation
+        pass
+
+
 class ScoreEvaluator(Evaluator):
     """Score an estimator on test data.
 
@@ -93,39 +92,25 @@ class ScoreEvaluator(Evaluator):
                 self.scorers[str(s)] = s
 
         self.groupby = groupby
-        # self.scores = defaultdict(list)
+        self.scores = defaultdict(list)
 
     def evaluate_test(self, estimator, X, y):
-        scores = defaultdict(list)
         if self.groupby is not None:
             groups = X.groupby(self.groupby)
             for group_key, Xs in groups:
                 ys = y[Xs.index]
-                scores["group"].append(group_key)
+                self.scores["group"].append(group_key)
                 for s_name, s in self.scorers.items():
-                    scores[s_name].append(s(estimator, Xs, ys))
+                    self.scores[s_name].append(s(estimator, Xs, ys))
 
         else:
             for s_name, s in self.scorers.items():
-                scores[s_name].append(s(estimator, X, y))
-        return scores
-    @classmethod
-    def _combine_two_scores(scores1, scores2):
-        # merge two scores dictionaries (concatenating key clashes)
-        merged = { 
-                key: scores1[key] + scores2[key] 
-                for key in set(scores1.keys() + scores2.keys())]
-        }
-        return merged
+                self.scores[s_name].append(s(estimator, X, y))
 
-    @classmethod
-    def combine(scores):
-        # merge score dictionaries, concatenating elements with duplicate keys
-       combined_scores = functools.reduce(_combine_two_scores, scores)
-       return combined_scores
-        
-
-
+    def get_results(self):
+        """Get the scores of the estimator."""
+        dfscores = pd.DataFrame(self.scores)
+        return dfscores
 
 
 class BinaryTreatmentEffect(Evaluator):
@@ -143,17 +128,17 @@ class BinaryTreatmentEffect(Evaluator):
         estimator,
         X,
         y,
+        random_state=None,
         treatment_column: Union[str, int],
         treatment_val: Any = 1,
         control_val: Any = 0,
-        evaluate_mode: str = "all",
-        random_state=None
+        evaluate_mode: str = "all"
     ):
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
         self.control_val = control_val
         self.evaluate_mode = evaluate_mode
-#        self.ate_samples = []
+        self.ate_samples = []
 
         self._prepare(self, esimator, X,y,random_state)
 
@@ -176,28 +161,21 @@ class BinaryTreatmentEffect(Evaluator):
 
         # ATE
         ate = np.mean(Ey_treated - Ey_control)
-        # self.ate_samples.append(ate)
-        return ate 
+        self.ate_samples.append(ate)
 
     def evaluate_all(self, estimator, X, y):
         if self.evaluate_mode == "all":
-            return self._evaluate(estimator, X, y)
+            self._evaluate(estimator, X, y)
 
     def evaluate_train(self, estimator, X, y):
         if self.evaluate_mode == "train":
-            return self._evaluate(estimator, X, y)
+            self._evaluate(estimator, X, y)
 
     def evaluate_test(self, estimator, X, y):
         if self.evaluate_mode == "test":
-            return self._evaluate(estimator, X, y)
-    @classmethod
-    def combine(ate_samples : Sequence(np.array)) -> np.array:
-        # concatenate list of scores
-        combined_scores = functools.reduce(operator.add, ate_samples)
-        combined_scores
+            self._evaluate(estimator, X, y)
 
-    @classmethod
-    def get_results(ate_samples : np.array, ci_probs=(0.025, 0.975)):
+    def get_results(self, ci_probs=(0.025, 0.975)):
         """Get the statistics of the ATE.
 
         Parameters
@@ -217,8 +195,8 @@ class BinaryTreatmentEffect(Evaluator):
         for p in ci_probs:
             if p < 0 or p > 1:
                 raise ValueError("ci_probs must be in range [0, 1].")
-        mean_ate = np.mean(ate_samples)
-        ci_levels = mquantiles(ate_samples, ci_probs)
+        mean_ate = np.mean(self.ate_samples)
+        ci_levels = mquantiles(self.ate_samples, ci_probs)
         return mean_ate, *ci_levels
 
 
@@ -258,7 +236,7 @@ class PartialDependanceEvaluator(Evaluator):
         estimator,
         X,
         y,
-        random_state=None,
+        random_state=None
         feature_grids=None,
         evaluate_mode="all",
         conditional_filter=None,
@@ -452,7 +430,7 @@ class PermutationImportanceEvaluator(Evaluator):
         self.grouped = grouped
         self.scorer = scorer
 
-        self._prepare(estimator=estimator, X=X, y=y,random_state=random_state)
+        self._prepare(X,y,random_state=random_state)
 
     def _prepare(
             self,
