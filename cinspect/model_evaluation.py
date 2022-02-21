@@ -62,17 +62,20 @@ def crossval_model(
         else:
             ys, yr = y[sind], y[rind]
         estimator.fit(Xr, yr)  # training data
+        results = []
         for ev in evaluators_:
-            ev.evaluate_test(estimator, Xs, ys)
-            ev.evaluate_train(estimator, Xr, yr)
-            ev.evaluate_all(estimator, X, y)
+            ev_results = evaluate_train_test_all(ev, estimator, Xb, yb)
+            results.append(ev_results)
+
+
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
+
 
     LOG.info("Validation done.")
 
 
-    return evaluators_
+    return zip(evaluators_, results)
 
 
 def bootstrap_model(
@@ -129,15 +132,7 @@ def bootstrap_model(
 
         results = []
         for ev in evaluators_:
-            train_results = ev.evaluate_train(estimator, Xb, yb)
-            test_results = ev.evaluate_test(estimator, Xb, yb)
-            all_results = ev.evaluate_all(estimator, Xb, yb)
-            # a bit of a workaround; suboptimal
-            train_results = [train_results] if train_results is not None else []
-            test_results = [test_results] if test_results is not None else []
-            all_results = [all_results] if all_results is not None else []
-            # breakpoint()
-            ev_results = ev.combine(train_results + test_results + all_results)
+            ev_results = evaluate_train_test_all(ev, estimator, Xb, yb)
             results.append(ev_results)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
@@ -145,3 +140,17 @@ def bootstrap_model(
     LOG.info("Bootstrapping done.")
 
     return zip(evaluators_, results)
+
+def evaluate_train_test_all(ev, estimator, Xb, yb):
+    # A bit of a workaround; need to rationalise the train/test/all interface
+    train_results = ev.evaluate_train(estimator, Xb, yb)
+    test_results = ev.evaluate_test(estimator, Xb, yb)
+    all_results = ev.evaluate_all(estimator, Xb, yb)
+    # a bit of a workaround; suboptimal
+    train_results = [train_results] if train_results is not None else []
+    test_results = [test_results] if test_results is not None else []
+    all_results = [all_results] if all_results is not None else []
+    # breakpoint()
+    ev_results = ev.combine(train_results + test_results + all_results)
+    return ev_results
+
