@@ -615,7 +615,7 @@ def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
 def _merge_dicts_by_concatting(dict1 , dict2):
     merged = { 
             key: dict1[key] + dict2[key] 
-            for key in set(dict1.keys() + dict2.keys())
+            for key in set(dict1.keys()).union(set(dict2.keys()))
     }
     return merged
 

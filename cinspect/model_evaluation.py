@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Union, Optional, Sequence, Tuple
+from joblib import Parallel, delayed
 from sklearn.model_selection import KFold
 from sklearn.utils import resample, check_random_state
 from sklearn.base import BaseEstimator
@@ -41,12 +42,7 @@ def crossval_model(
 
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
-    evaluators_ = []
-
-    for ev in evaluators:
-        evaluators_.append(
-                ev(estimator, X, y, random_state=random_state)
-                )
+    evaluators_ = [ev(estimator, X, y, random_state=random_state) for ev in evaluators]
 
     LOG.info("Validating ...")
 
@@ -109,18 +105,18 @@ def bootstrap_model(
     # to select the range over which partial dependence should be shown.
     random_state = check_random_state(random_state)
     # Finish constructing the evaluators by passing in the current estimator and data
-    evaluators_ = []
-    for ev in evaluators:
-        evaluators_.append(
-                ev(estimator=estimator, X=X, y=y, random_state=random_state)
-                )
+    evaluators_ = [
+            ev(estimator=estimator, X=X, y=y, random_state=random_state) 
+            for ev in evaluators
+            ]
+
 
     LOG.info("Bootstrapping ...")
 
     indices = np.arange(len(X))
 
-    # Bootstrapping loop
-    for i in range(replications):
+    # takes an index i; basically redundant
+    def bootstrap_iteration(i):
         LOG.info(f"Bootstrap round {i + 1}")
         start = time.time()
         Xb, yb, indicesb = resample(X, y, indices)
@@ -136,10 +132,32 @@ def bootstrap_model(
             results.append(ev_results)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
+        return results
 
+    start = time.time()
+
+    # run bootstrapping in parallel
+    results_per_iter = Parallel(n_jobs=-1) ( 
+            delayed(bootstrap_iteration)(i) for i in range(replications)
+            )
+
+    end = time.time()
+    delta = end-start
     LOG.info("Bootstrapping done.")
+    LOG.info(f"Cumulative bootstrapping time {delta:.2f}s; average {delta/replications:.2f}s per iteration")
+    
 
-    return zip(evaluators_, results)
+    # combine the results of all iterations for each evaluator
+    # TODO: 
+    # should we specify that .combine() be commutative, so we don't need to worry about order? 
+    # Will this always be the case?
+    results_combined = [
+            evaluators_[j].combine(
+                  [results_per_iter[i][j] for i in range(replications)]
+                  )
+                for j in range(len(evaluators))]
+
+    return zip(evaluators_, results_combined)
 
 def evaluate_train_test_all(ev, estimator, Xb, yb):
     # A bit of a workaround; need to rationalise the train/test/all interface
