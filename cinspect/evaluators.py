@@ -147,7 +147,7 @@ class BinaryTreatmentEffect(Evaluator):
         self.evaluate_mode = evaluate_mode
 #        self.ate_samples = []
 
-        self._prepare(self, esimator, X,y,random_state)
+        self._prepare(estimator, X,y,random_state)
 
     def _prepare(self, estimator, X, y, random_state=None):
         T = X[self.treatment_column]

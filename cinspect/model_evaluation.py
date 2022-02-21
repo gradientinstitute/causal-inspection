@@ -42,11 +42,12 @@ def crossval_model(
 
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
+
+    # list of evaluators (fully applied constructors)
     evaluators_ = [ev(estimator, X, y, random_state=random_state) for ev in evaluators]
 
-    LOG.info("Validating ...")
+    def validation_iteration(i, rind, sind): 
 
-    for i, (rind, sind) in enumerate(cv.split(X, stratify)):
         LOG.info(f"Validation round {i + 1}")
         start = time.time()
         if hasattr(X, "iloc"):
@@ -60,18 +61,49 @@ def crossval_model(
         estimator.fit(Xr, yr)  # training data
         results = []
         for ev in evaluators_:
-            ev_results = evaluate_train_test_all(ev, estimator, Xb, yb)
+            ev_results = _evaluate_train_test_all(
+                    ev, 
+                    estimator, 
+                    X_train = Xr,
+                    y_train = yr,
+                    X_test = Xs,
+                    y_test = ys,
+                    X_all = X,
+                    y_all = y
+                    )
             results.append(ev_results)
+        return results
 
 
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
 
+    LOG.info("Validating ...")
 
+    start = time.time()
+
+    results_per_iter = Parallel(n_jobs=-1)(delayed(validation_iteration)(i, rind, sind) 
+            for (i, (rind,sind)) in enumerate(cv.split(X, stratify)))
+    
+    end = time.time()
+
+    delta = end-start
     LOG.info("Validation done.")
+    
+    n_iters = len(results_per_iter)
+    LOG.info(f"Cumulative validation time {delta:.2f}s; average {delta/n_iters:.2f}s per iteration")
+
+# breakpoint()
+    # aggregate over iterations
+    # TODO: this should be factored out; duplicated with bootstrap_model
+    results_combined = [
+            evaluators_[j].combine(
+                  [results_per_iter[i][j] for i in range(n_iters)]
+                  )
+                for j in range(len(evaluators_))]
 
 
-    return zip(evaluators_, results)
+    return zip(evaluators_, results_combined)
 
 
 def bootstrap_model(
@@ -128,7 +160,7 @@ def bootstrap_model(
 
         results = []
         for ev in evaluators_:
-            ev_results = evaluate_train_test_all(ev, estimator, Xb, yb)
+            ev_results = _evaluate_train_test_all(ev, estimator, Xb, yb, Xb, yb, Xb, yb)
             results.append(ev_results)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
@@ -155,15 +187,15 @@ def bootstrap_model(
             evaluators_[j].combine(
                   [results_per_iter[i][j] for i in range(replications)]
                   )
-                for j in range(len(evaluators))]
+                for j in range(len(evaluators_))]
 
     return zip(evaluators_, results_combined)
 
-def evaluate_train_test_all(ev, estimator, Xb, yb):
+def _evaluate_train_test_all(ev, estimator, X_train, y_train, X_test, y_test,X_all,y_all):
     # A bit of a workaround; need to rationalise the train/test/all interface
-    train_results = ev.evaluate_train(estimator, Xb, yb)
-    test_results = ev.evaluate_test(estimator, Xb, yb)
-    all_results = ev.evaluate_all(estimator, Xb, yb)
+    train_results = ev.evaluate_train(estimator, X_train, y_train)
+    test_results = ev.evaluate_test(estimator, X_test, y_test)
+    all_results = ev.evaluate_all(estimator, X_all, y_all)
     # a bit of a workaround; suboptimal
     train_results = [train_results] if train_results is not None else []
     test_results = [test_results] if test_results is not None else []
@@ -171,4 +203,5 @@ def evaluate_train_test_all(ev, estimator, Xb, yb):
     # breakpoint()
     ev_results = ev.combine(train_results + test_results + all_results)
     return ev_results
+
 

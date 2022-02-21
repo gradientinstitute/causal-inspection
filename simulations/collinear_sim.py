@@ -6,6 +6,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+import functools
+
 from scipy.special import expit
 
 from sklearn.linear_model import Ridge
@@ -13,7 +15,6 @@ from sklearn.model_selection import (GridSearchCV, ShuffleSplit, RepeatedKFold,
                                      GroupKFold)
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.base import clone
-
 from cinspect.model_evaluation import bootstrap_model, crossval_model
 from cinspect.evaluators import BinaryTreatmentEffect
 from cinspect.estimators import BinaryTreatmentRegressor
@@ -144,23 +145,36 @@ def main():
         results[name] = {}
 
         # Casual estimation -- Bootstrap
-        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data
-        bootstrap_model(mod, X, Y, [bteval], replications=replications)
-        results[name]["Bootstrap"] = bteval.get_results()
+        bteval = functools.partial(
+                BinaryTreatmentEffect
+                , treatment_column="T"
+        )  # all data
+        [(bteval_all_data_fitted, all_data_results)]= bootstrap_model(mod, X, Y, [bteval], replications=replications)
+        results[name]["Bootstrap"] = all_data_results
 
         # Casual estimation -- KFold
-        bteval = BinaryTreatmentEffect(treatment_column="T",
-                                       evaluate_mode="test")
+
         kfold = RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3)
-        crossval_model(mod, X, Y, [bteval], kfold)
-        results[name]["KFold"] = bteval.get_results()
+        bteval = functools.partial(
+                    BinaryTreatmentEffect, 
+                    treatment_column="T",
+                    evaluate_mode="test"
+                    )
+
+        [(bteval_fitted, bteval_results)] = crossval_model(mod, X, Y, [bteval], kfold)
+        results[name]["KFold"] = bteval_results 
 
         # Casual estimation -- ShuffleSplit
-        bteval = BinaryTreatmentEffect(treatment_column="T",
-                                       evaluate_mode="test")
-        crossval_model(mod, X, Y, [bteval],
-                       ShuffleSplit(n_splits=replications))
-        results[name]["ShuffleSplit"] = bteval.get_results()
+        bteval_ss = functools.partial(
+                BinaryTreatmentEffect,
+                treatment_column="T",
+                evaluate_mode="test"
+                )
+        [(bteval_ss_fitted, bteval_ss_results)] = crossval_model(
+                mod, X, Y, [bteval],
+                ShuffleSplit(n_splits=replications)
+                )
+        results[name]["ShuffleSplit"] = bteval_ss_results # get_results()
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't
     # get common samples in the train and test folds
@@ -169,18 +183,27 @@ def main():
                               cv=GroupKFold(n_splits=5))
 
     if "ridge_gs" in models:
-        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(ridge_gs, X, Y, [bteval], replications=replications,
-                        groups=True)
-        results["ridge_gs"]["Bootstrap-group"] = bteval.get_results()
+        bteval = functools.partial( # all data used
+                BinaryTreatmentEffect,
+                treatment_column="T"
+                )  
+        [(bteval_ridge_fitted, bteval_ridge_results)] = bootstrap_model(
+                ridge_gs, X, Y, [bteval], replications=replications,
+                groups=True)
+
+        results["ridge_gs"]["Bootstrap-group"] = bteval_ridge_results # .get_results()
 
     if "btr" in models:
-        btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.)
-        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(btr, X, Y, [bteval], replications=replications,
-                        groups=True)
-        results["btr"]["Bootstrap-group"] = bteval.get_results()
+        btr = BinaryTreatmentRegressor( ridge_gs_g, "T", 1.)
 
+        bteval = functools.partial(
+                BinaryTreatmentEffect,
+                treatment_column="T"
+                )  # all data used
+        [(bteval_btr_fitted, bteval_btr_results)] =bootstrap_model(btr, X, Y, [bteval], replications=replications,
+                        groups=True)
+        results["btr"]["Bootstrap-group"] = bteval_btr_results
+    breakpoint()
     # Print results:
     LOG.info(f"True ATE: {TRUE_ATE:.3f}")
     for name, methods in results.items():
