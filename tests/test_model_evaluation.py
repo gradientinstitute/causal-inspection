@@ -74,13 +74,14 @@ def test_eval_function_calls(eval_func):
     assert evaluators[0].aggregate_call  # type: ignore
 
 
-class RandomEvaluator(Evaluator):
+class _MockRandomEvaluator(Evaluator):
     """Produce a random evaluation."""
 
-    def __init__(self):
-        """Produce a random evaluation."""
+    def __init__(self, sample_from_rng_with_distribution):
+        """Produce a random evaluation, drawn using the given sampling function"""
         self._random_state = None
         self._results = []
+        self._sample_from_rng_with_distribution = sample_from_rng_with_distribution
         pass
 
     def prepare(self, estimator, X, y=None, random_state=None):
@@ -91,7 +92,7 @@ class RandomEvaluator(Evaluator):
         """Evaluate estimator; in this case, the evaluation is random."""
         # pass through/seed/create new rng as appropriate
         self._random_state = check_random_state(self._random_state)
-        result = self._random_state.normal()
+        result = self._sample_from_rng_with_distribution(self._random_state)
         # intended semantics is that repeated calls *append* to internal state
         self._results.append(result)
 
@@ -114,10 +115,13 @@ random_seeds = [42, np.random.RandomState()]
 def test_reproducible_function_calls(eval_func, random_state):
     """Test that model evaluator functions produce same output given same input."""
     estimator = _MockEstimator()
-    evaluators_1 = [RandomEvaluator()]
-    evaluators_2 = [RandomEvaluator()]
 
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
+
+
+    sample_from_rng_with_distribution = lambda rng : rng.normal()
+    evaluators_1 = [RandomEvaluator(sample_from_rng_with_distribution)]
+    evaluators_2 = [RandomEvaluator(sample_from_rng_with_distribution)]
 
     evaluators_1_ = eval_func(estimator, X, y, evaluators_1, random_state=random_state)
     evaluators_2_ = eval_func(estimator, X, y, evaluators_2, random_state=random_state)
@@ -139,3 +143,6 @@ def test_reproducible_function_calls(eval_func, random_state):
 
     assert results_1 == results_2
     assert results_1_ == results_2_
+
+
+
