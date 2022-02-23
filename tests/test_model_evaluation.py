@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from sklearn.base import BaseEstimator
-
+from sklearn.utils.validation import check_random_state
 from cinspect.model_evaluation import crossval_model, bootstrap_model
 from cinspect.evaluators import Evaluator
 
@@ -80,9 +80,9 @@ class RandomEvaluator(Evaluator):
         pass
     def prepare(self, estimator, X, y=None, random_state=None):
         self.random_state=random_state
-    def _evaluate(self, estimator, X, y=None):
-        rng = self._get_rng()
-        result = rng.random()
+    def _evaluate(self, estimator, X, y):
+        rng = check_random_state(self.random_state)
+        result = rng.normal()
         return result
 
     evaluate_all = _evaluate
@@ -92,25 +92,14 @@ class RandomEvaluator(Evaluator):
     def get_results(self):
         return self.results
 
-    def _get_rng(self):
-        """
-        Get our rng; get stored rng/seed new one.
-        If we have no rng, make a random one.
-        """
-        if self.random_state is None:
-             rng = np.random.default_rng()
-        elif isinstance(self.random_state, int):
-             rng = np.random_default_rng(self.random_state)
-        else: 
-             rng = self.random_state
-        return rng
 
-@pytest.mark.parametrize("eval_func", [crossval_model, bootstrap_model])
-def test_reproducible_function_calls(eval_func):
+model_evaluators = [crossval_model, bootstrap_model]
+random_seeds = [42, np.random.RandomState()]
+@pytest.mark.parametrize("eval_func, random_state", zip(model_evaluators, random_seeds))
+def test_reproducible_function_calls(eval_func, random_state):
     """Test that model evaluator functions produce same output given same input"""
     estimator = _MockEstimator()
     evaluators = [RandomEvaluator()]
-    random_state = 42
 
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
     evaluators_1 = eval_func(estimator,X,y,evaluators, random_state=random_state)
