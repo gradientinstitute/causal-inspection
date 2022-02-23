@@ -1,7 +1,7 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Tests for model_evaluation module."""
-
+import logging
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,6 +9,8 @@ from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_random_state
 from cinspect.model_evaluation import crossval_model, bootstrap_model
 from cinspect.evaluators import Evaluator
+
+logger = logging.getLogger()
 
 
 class _MockEstimator(BaseEstimator):
@@ -78,7 +80,7 @@ class _MockRandomEvaluator(Evaluator):
     """Produce a random evaluation."""
 
     def __init__(self, sample_from_rng_with_distribution):
-        """Produce a random evaluation, drawn using the given sampling function"""
+        """Produce a random evaluation, drawn using the given sampling function."""
         self._random_state = None
         self._results = []
         self._sample_from_rng_with_distribution = sample_from_rng_with_distribution
@@ -118,10 +120,11 @@ def test_reproducible_function_calls(eval_func, random_state):
 
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
 
+    def sample_from_rng_with_distribution(rng):
+        rng.normal()
 
-    sample_from_rng_with_distribution = lambda rng : rng.normal()
-    evaluators_1 = [RandomEvaluator(sample_from_rng_with_distribution)]
-    evaluators_2 = [RandomEvaluator(sample_from_rng_with_distribution)]
+    evaluators_1 = [_MockRandomEvaluator(sample_from_rng_with_distribution)]
+    evaluators_2 = [_MockRandomEvaluator(sample_from_rng_with_distribution)]
 
     evaluators_1_ = eval_func(estimator, X, y, evaluators_1, random_state=random_state)
     evaluators_2_ = eval_func(estimator, X, y, evaluators_2, random_state=random_state)
@@ -145,4 +148,59 @@ def test_reproducible_function_calls(eval_func, random_state):
     assert results_1_ == results_2_
 
 
+class _MockLinearEstimator(BaseEstimator):
+    def __init__(self, coefs):
+        coefs = np.array(coefs)
+        assert len(coefs.shape) == 1
+        self._coefs = coefs
 
+    def fit(self, X, y):
+        pass
+
+    def predict(self, X):
+        y_pred = self._coefs @ X
+        return y_pred
+
+
+def test_bootstrap_samples_from_eval_distribution():
+    """Test that true mean is in 95%CI of bootstrap samples.
+
+    This is a sanity test of bootstrapping from an Evaluator
+    that generates evaluations from a known distribution;
+    it does not make meaningful use of an estimator.
+
+    This is deterministic, assuming proper use of random seeds
+    (so won't break unless a dependent use of rngs is changed,
+    in which case there's a 5% chance of a false negative,
+    in which case change the seed?)
+    """
+    estimator = _MockEstimator()
+
+    X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
+    mean = 0
+    stdev = 1
+
+    def sample_from_normal(rng):
+        rng.normal(mean, stdev)
+
+    evaluator = _MockRandomEvaluator(sample_from_normal)
+    random_state = 42
+    n_bootstrap_replications = 30
+    [evaluator_] = bootstrap_model(
+            estimator,
+            X,
+            y,
+            [evaluator],
+            replications=n_bootstrap_replications,
+            random_state=random_state
+            )
+    results = evaluator_.get_results()
+
+    bs_mean = np.mean(results)
+
+    # with 95% probability,
+    # mean in bs_mean +- bound.
+    bound = 1.96*(stdev/(np.sqrt(n_bootstrap_replications)))
+    logger.info(f"Asserting that {mean} is within {bs_mean} +- {bound}")
+
+    assert (mean >= bs_mean - bound) and (mean <= bs_mean + bound)
