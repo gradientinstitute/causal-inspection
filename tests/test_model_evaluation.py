@@ -5,7 +5,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-from collections import defaultdict
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_random_state
 from cinspect.model_evaluation import crossval_model, bootstrap_model
@@ -74,22 +73,28 @@ def test_eval_function_calls(eval_func):
     evaluators = eval_func(estimator, X, y, evaluators)
     assert evaluators[0].aggregate_call  # type: ignore
 
+
 class RandomEvaluator(Evaluator):
-    """
-    Produces a random evaluation
-    """
+    """Produce a random evaluation."""
+
     def __init__(self):
-        self.random_state = None
-        self.results = []
+        """Produce a random evaluation."""
+        self._random_state = None
+        self._results = []
         pass
+
     def prepare(self, estimator, X, y=None, random_state=None):
-        self.random_state=random_state
+        """Initialise using data; in this case, only the random state is used."""
+        self._random_state = random_state
+
     def _evaluate(self, estimator, X, y):
+        """Evaluate estimator; in this case, the evaluation is random."""
         # pass through/seed/create new rng as appropriate
-        self.random_state = check_random_state(self.random_state)
-        result = self.random_state.normal()
+        self._random_state = check_random_state(self._random_state)
+        result = self._random_state.normal()
         # intended semantics is that repeated calls *append* to internal state
-        self.results.append(result)
+        self._results.append(result)
+
         return result
 
     evaluate_all = _evaluate
@@ -97,25 +102,31 @@ class RandomEvaluator(Evaluator):
     evaluate_test = _evaluate
 
     def get_results(self):
-        return self.results
+        """Return (random) evaluation."""
+        return self._results
 
 
 model_evaluators = [crossval_model, bootstrap_model]
 random_seeds = [42, np.random.RandomState()]
+
+
 @pytest.mark.parametrize("eval_func, random_state", zip(model_evaluators, random_seeds))
 def test_reproducible_function_calls(eval_func, random_state):
-    """Test that model evaluator functions produce same output given same input"""
+    """Test that model evaluator functions produce same output given same input."""
     estimator = _MockEstimator()
     evaluators_1 = [RandomEvaluator()]
     evaluators_2 = [RandomEvaluator()]
 
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
-    evaluators_1_ = eval_func(estimator,X,y,evaluators_1, random_state=random_state)
-    evaluators_2_ = eval_func(estimator,X,y,evaluators_2, random_state=random_state)
-    # two equality tests to allow for mutated OR new evaluators to be returned; 
-    # unclear from interface, 
-    # but the two assertions below should hold for any reasonable implementation
+
+    evaluators_1_ = eval_func(estimator, X, y, evaluators_1, random_state=random_state)
+    evaluators_2_ = eval_func(estimator, X, y, evaluators_2, random_state=random_state)
+
+    # Two equality tests to allow for mutated OR new evaluators to be returned.
+    # The interface leaves this ambiguous,
+    # But the two assertions below should hold for any reasonable implementation.
     def all_results(evals):
+        # get results from each evaluator in the list
         map(lambda ev: ev.get_results(), evals)
 
     # results of the evals passed to the model_evaluation function
@@ -128,4 +139,3 @@ def test_reproducible_function_calls(eval_func, random_state):
 
     assert results_1 == results_2
     assert results_1_ == results_2_
-
