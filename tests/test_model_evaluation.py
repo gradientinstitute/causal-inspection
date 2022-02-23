@@ -121,7 +121,7 @@ def test_reproducible_function_calls(eval_func, random_state):
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
 
     def sample_from_rng_with_distribution(rng):
-        rng.normal()
+        return rng.normal()
 
     evaluators_1 = [_MockRandomEvaluator(sample_from_rng_with_distribution)]
     evaluators_2 = [_MockRandomEvaluator(sample_from_rng_with_distribution)]
@@ -133,6 +133,7 @@ def test_reproducible_function_calls(eval_func, random_state):
     # The interface leaves this ambiguous,
     # But the two assertions below should hold for any reasonable implementation.
     def all_results(evals):
+
         # get results from each evaluator in the list
         map(lambda ev: ev.get_results(), evals)
 
@@ -161,8 +162,32 @@ class _MockLinearEstimator(BaseEstimator):
         y_pred = self._coefs @ X
         return y_pred
 
+def test_bootstrap_samples_from_eval_distribution(n_repeats=10, seed=42):
+    """Test that true mean is in 95%CI of bootstrap samples.
+    If there is a very probability that it's not, this test fails.
 
-def test_bootstrap_samples_from_eval_distribution():
+    This test simply repeats _test_bootstrap_samples_from_eval_distribution
+    and fails if it fails 100% of the time; chance of false failure is 0.05**(n_repeats).
+
+    The default of 10 repeats puts us at a 1:1e14 chance of false failure.
+
+    This is obviously at the expense of allowing more false passes.
+    """
+    # generate a sequence of random seeds
+    seeds = np.random.default_rng(seed).integers(10000,size=n_repeats)
+    logger.info(f"seeds {seeds}")
+
+    
+    within_bound_list = [
+            _test_bootstrap_samples_from_eval_distribution(random_state)
+            for random_state in seeds
+            ]
+
+
+    assert np.any(within_bound_list)
+
+
+def _test_bootstrap_samples_from_eval_distribution(random_state):
     """Test that true mean is in 95%CI of bootstrap samples.
 
     This is a sanity test of bootstrapping from an Evaluator
@@ -179,23 +204,23 @@ def test_bootstrap_samples_from_eval_distribution():
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
     mean = 0
     stdev = 1
-
+    
     def sample_from_normal(rng):
-        rng.normal(mean, stdev)
+        return rng.normal(mean, stdev)
 
     evaluator = _MockRandomEvaluator(sample_from_normal)
-    random_state = 42
     n_bootstrap_replications = 30
-    [evaluator_] = bootstrap_model(
-            estimator,
-            X,
-            y,
-            [evaluator],
-            replications=n_bootstrap_replications,
-            random_state=random_state
-            )
-    results = evaluator_.get_results()
 
+    # seed from which to generate a sequence of random seeds
+    [evaluator_] = bootstrap_model(
+        estimator,
+        X,
+        y,
+        [evaluator],
+        replications=n_bootstrap_replications,
+        random_state=random_state
+        )
+    results = evaluator_.get_results()
     bs_mean = np.mean(results)
 
     # with 95% probability,
@@ -203,4 +228,6 @@ def test_bootstrap_samples_from_eval_distribution():
     bound = 1.96*(stdev/(np.sqrt(n_bootstrap_replications)))
     logger.info(f"Asserting that {mean} is within {bs_mean} +- {bound}")
 
-    assert (mean >= bs_mean - bound) and (mean <= bs_mean + bound)
+    within_bound = (mean >= bs_mean - bound) and (mean <= bs_mean + bound)
+
+    return within_bound
