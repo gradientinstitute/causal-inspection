@@ -4,8 +4,9 @@ Causal Inspection
 A Scikit-learn inspired inspection module for *causal models*.
 
 <img src="pd_examples.png" alt="Example partial dependence plots">
-Example of how partial dependence plots can be used for visualising causal
-effect, see [3] for more details.
+Plots generated using this library, these are an example of how partial 
+dependence plots can be used for visualising causal effect, see [3] for 
+more details.<br><br>
 
 Using machine learning for (observational) causal inference is distinct from
 how machine learning is used for prediction. Typically a process like the
