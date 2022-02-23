@@ -5,6 +5,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from collections import defaultdict
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_random_state
 from cinspect.model_evaluation import crossval_model, bootstrap_model
@@ -74,15 +75,21 @@ def test_eval_function_calls(eval_func):
     assert evaluators[0].aggregate_call  # type: ignore
 
 class RandomEvaluator(Evaluator):
+    """
+    Produces a random evaluation
+    """
     def __init__(self):
         self.random_state = None
-        self.results = None
+        self.results = []
         pass
     def prepare(self, estimator, X, y=None, random_state=None):
         self.random_state=random_state
     def _evaluate(self, estimator, X, y):
-        rng = check_random_state(self.random_state)
-        result = rng.normal()
+        # pass through/seed/create new rng as appropriate
+        self.random_state = check_random_state(self.random_state)
+        result = self.random_state.normal()
+        # intended semantics is that repeated calls *append* to internal state
+        self.results.append(result)
         return result
 
     evaluate_all = _evaluate
