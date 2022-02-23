@@ -106,10 +106,26 @@ random_seeds = [42, np.random.RandomState()]
 def test_reproducible_function_calls(eval_func, random_state):
     """Test that model evaluator functions produce same output given same input"""
     estimator = _MockEstimator()
-    evaluators = [RandomEvaluator()]
+    evaluators_1 = [RandomEvaluator()]
+    evaluators_2 = [RandomEvaluator()]
 
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
-    evaluators_1 = eval_func(estimator,X,y,evaluators, random_state=random_state)
-    evaluators_2 = eval_func(estimator,X,y,evaluators, random_state=random_state)
-    assert evaluators_1 == evaluators_2
+    evaluators_1_ = eval_func(estimator,X,y,evaluators_1, random_state=random_state)
+    evaluators_2_ = eval_func(estimator,X,y,evaluators_2, random_state=random_state)
+    # two equality tests to allow for mutated OR new evaluators to be returned; 
+    # unclear from interface, 
+    # but the two assertions below should hold for any reasonable implementation
+    def all_results(evals):
+        map(lambda ev: ev.get_results(), evals)
+
+    # results of the evals passed to the model_evaluation function
+    results_1 = all_results(evaluators_1)
+    results_2 = all_results(evaluators_2)
+
+    # results of evals returned by the model_evaluation function
+    results_1_ = all_results(evaluators_1_)
+    results_2_ = all_results(evaluators_2_)
+
+    assert results_1 == results_2
+    assert results_1_ == results_2_
 
