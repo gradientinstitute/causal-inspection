@@ -80,7 +80,15 @@ plots.
 
 
 ```python
+import matplotlib.pyplot as plt
+
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import GridSearchCV
+from cinspect import (bootstrap_model, PartialDependanceEvaluator,
+    PermutationImportanceEvaluator)
+
 # X is a pandas dataframe with a column labelled "T" for treatment
+# ...
 
 # Model, with built in model selection
 model = GridSearchCV(
