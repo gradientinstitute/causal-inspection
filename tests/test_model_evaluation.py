@@ -4,6 +4,7 @@
 import logging
 import numpy as np
 import pandas as pd
+import itertools
 import pytest
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_random_state
@@ -112,8 +113,9 @@ class _MockRandomEvaluator(Evaluator):
 model_evaluators = [crossval_model, bootstrap_model]
 random_seeds = [42, np.random.RandomState()]
 
-
-@pytest.mark.parametrize("eval_func, random_state", zip(model_evaluators, random_seeds))
+@pytest.mark.parametrize("eval_func, random_state", 
+        itertools.product(model_evaluators, random_seeds)
+        )
 def test_reproducible_function_calls(eval_func, random_state):
     """Test that model evaluator functions produce same output given same input."""
     estimator = _MockEstimator()
