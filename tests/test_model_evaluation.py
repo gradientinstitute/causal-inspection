@@ -201,6 +201,7 @@ def test_bootstrap_samples_from_eval_distribution(n_repeats=10, seed=42):
     
     within_bound_list = [
             _test_bootstrap_samples_from_eval_distribution(random_state)
+
             for random_state in seeds
             ]
 
@@ -265,9 +266,9 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
     X=st.shared(test_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0]),
     y=st.shared(test_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1]),
     evaluators=st.lists(st.builds(Evaluator)),
-    replications=st.integers(),
+    replications=st.integers(max_value=100), # TODO: max_value should be increased
     random_state=st.one_of(st.none(), st.integers(min_value=0, max_value=2**32-1), st.builds(RandomState)),
-    groups=st.booleans(),# TODO: this needs to have same length as to X and y
+    groups=st.booleans(),
 )
 def test_fuzz_bootstrap_model(
     estimator, X, y, evaluators, replications, random_state, groups
