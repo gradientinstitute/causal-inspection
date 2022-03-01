@@ -1,40 +1,28 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Tests for model_evaluation module."""
-import logging
-import numpy as np
-from numpy.random.mtrand import RandomState
-import pandas as pd
-from pandas.core.frame import DataFrame
-from pandas.core.series import Series
 import itertools
+import logging
+
+import numpy as np
+import pandas as pd
 import pytest
-from sklearn.base import BaseEstimator
-from sklearn.utils.validation import check_random_state
+from cinspect.evaluators import Evaluator
+from cinspect.model_evaluation import bootstrap_model, crossval_model
+from hypothesis import given
+from hypothesis import strategies as st
+from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection._split import (
-    GroupKFold,
-    KFold,
-    LeaveOneGroupOut,
-    LeaveOneOut,
-    StratifiedGroupKFold,
-    StratifiedKFold,
-    TimeSeriesSplit,
-)
-from hypothesis import given, strategies as st
-from hypothesis.extra.numpy import arrays, scalar_dtypes, array_shapes
+from sklearn.utils.validation import check_random_state
 
-from cinspect.model_evaluation import crossval_model, bootstrap_model
-from cinspect.evaluators import Evaluator
 import testing_strategies
 
 logger = logging.getLogger()
 
 
 class _MockEstimator(BaseEstimator):
-
     def __init__(self):
         self.is_fitted = False
 
@@ -47,7 +35,6 @@ class _MockEstimator(BaseEstimator):
 
 
 class _MockEvaluator(Evaluator):
-
     def __init__(self):
         self.eval_all = False
         self.eval_test = False
@@ -132,9 +119,10 @@ class _MockRandomEvaluator(Evaluator):
 model_evaluators = [crossval_model, bootstrap_model]
 random_seeds = [42, np.random.RandomState()]
 
-@pytest.mark.parametrize("eval_func, random_state", 
-        itertools.product(model_evaluators, random_seeds)
-        )
+
+@pytest.mark.parametrize(
+    "eval_func, random_state", itertools.product(model_evaluators, random_seeds)
+)
 def test_reproducible_function_calls(eval_func, random_state):
     """Test that model evaluator functions produce same output given same input."""
     estimator = _MockEstimator()
@@ -183,8 +171,10 @@ class _MockLinearEstimator(BaseEstimator):
         y_pred = self._coefs @ X
         return y_pred
 
+
 def test_bootstrap_samples_from_eval_distribution(n_repeats=10, seed=42):
     """Test that true mean is in 95%CI of bootstrap samples.
+
     If there is a very probability that it's not, this test fails.
 
     This test simply repeats _test_bootstrap_samples_from_eval_distribution
@@ -195,16 +185,13 @@ def test_bootstrap_samples_from_eval_distribution(n_repeats=10, seed=42):
     This is obviously at the expense of allowing more false passes.
     """
     # generate a sequence of random seeds
-    seeds = np.random.default_rng(seed).integers(10000,size=n_repeats)
+    seeds = np.random.default_rng(seed).integers(10000, size=n_repeats)
     logger.info(f"seeds {seeds}")
 
-    
     within_bound_list = [
-            _test_bootstrap_samples_from_eval_distribution(random_state)
-
-            for random_state in seeds
-            ]
-
+        _test_bootstrap_samples_from_eval_distribution(random_state)
+        for random_state in seeds
+    ]
 
     assert np.any(within_bound_list)
 
@@ -226,7 +213,7 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
     mean = 0
     stdev = 1
-    
+
     def sample_from_normal(rng):
         return rng.normal(mean, stdev)
 
@@ -240,14 +227,14 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
         y,
         [evaluator],
         replications=n_bootstrap_replications,
-        random_state=random_state
-        )
+        random_state=random_state,
+    )
     results = evaluator_.get_results()
     bs_mean = np.mean(results)
 
     # with 95% probability,
     # mean in bs_mean +- bound.
-    bound = 1.96*(stdev/(np.sqrt(n_bootstrap_replications)))
+    bound = 1.96 * (stdev / (np.sqrt(n_bootstrap_replications)))
     logger.info(f"Asserting that {mean} is within {bs_mean} +- {bound}")
 
     within_bound = (mean >= bs_mean - bound) and (mean <= bs_mean + bound)
@@ -258,24 +245,26 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
 # This test code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
 
+
 @given(
-    estimator=st.one_of(
-        st.builds(DummyRegressor),
-        st.builds(LinearRegression)
-    ),
+    estimator=st.one_of(st.builds(DummyRegressor), st.builds(LinearRegression)),
     X=st.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0]),
     y=st.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1]),
     evaluators=st.lists(st.builds(Evaluator)),
-    replications=st.integers(max_value=30), # TODO: max_value should be increased when parallelising
-    random_state=st.one_of(st.none(), st.integers(min_value=0, max_value=2**32-1), st.builds(RandomState)),
+    replications=st.integers(
+        max_value=30
+    ),  # TODO: max_value should be increased when parallelising
+    random_state=st.one_of(
+        st.none(),
+        st.integers(min_value=0, max_value=2**32 - 1),
+        st.builds(RandomState),
+    ),
     groups=st.booleans(),
 )
 def test_fuzz_bootstrap_model(
     estimator, X, y, evaluators, replications, random_state, groups
 ):
-    """
-    Simple fuzz-testing to ensure that we can generate random data that yields no exceptions
-    """
+    """Simple fuzz-testing to ensure that we can generate random data that yields no exceptions."""
     bootstrap_model(
         estimator=estimator,
         X=X,
