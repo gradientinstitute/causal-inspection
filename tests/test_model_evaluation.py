@@ -28,7 +28,7 @@ from hypothesis.extra.numpy import arrays, scalar_dtypes, array_shapes
 
 from cinspect.model_evaluation import crossval_model, bootstrap_model
 from cinspect.evaluators import Evaluator
-import test_strategies
+import testing_strategies
 
 logger = logging.getLogger()
 
@@ -263,10 +263,10 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
         st.builds(DummyRegressor),
         st.builds(LinearRegression)
     ),
-    X=st.shared(test_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0]),
-    y=st.shared(test_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1]),
+    X=st.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0]),
+    y=st.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1]),
     evaluators=st.lists(st.builds(Evaluator)),
-    replications=st.integers(max_value=100), # TODO: max_value should be increased
+    replications=st.integers(max_value=30), # TODO: max_value should be increased when parallelising
     random_state=st.one_of(st.none(), st.integers(min_value=0, max_value=2**32-1), st.builds(RandomState)),
     groups=st.booleans(),
 )
