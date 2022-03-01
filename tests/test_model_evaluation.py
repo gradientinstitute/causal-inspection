@@ -3,19 +3,31 @@
 """Tests for model_evaluation module."""
 import itertools
 import logging
-
 import numpy as np
 import pandas as pd
 import pytest
-from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import bootstrap_model, crossval_model
+
 from hypothesis import given
-from hypothesis import strategies as st
+from hypothesis.extra.numpy import arrays, scalar_dtypes
+import hypothesis.strategies as hst
+
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.utils.validation import check_random_state
+from sklearn.model_selection._split import (
+    GroupKFold,
+    KFold,
+    LeaveOneGroupOut,
+    LeaveOneOut,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+    TimeSeriesSplit,
+)
+
+from cinspect.evaluators import Evaluator
+from cinspect.model_evaluation import bootstrap_model, crossval_model
 
 import testing_strategies
 
@@ -242,29 +254,37 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
     return within_bound
 
 
-# This test code was written by the `hypothesis.extra.ghostwriter` module
+estimator_strategy = hst.one_of(
+    hst.builds(DummyRegressor), hst.builds(LinearRegression)
+)
+X_strategy = hst.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0])
+y_strategy = hst.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1])
+evaluators_strategy = hst.lists(hst.builds(Evaluator))
+random_state_strategy = hst.one_of(
+    hst.none(),
+    hst.integers(min_value=0, max_value=2**32 - 1),
+    hst.builds(RandomState),
+)
+
+# Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
 
 
 @given(
-    estimator=st.one_of(st.builds(DummyRegressor), st.builds(LinearRegression)),
-    X=st.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0]),
-    y=st.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1]),
-    evaluators=st.lists(st.builds(Evaluator)),
-    replications=st.integers(
+    estimator=estimator_strategy,
+    X=X_strategy,
+    y=y_strategy,
+    evaluators=evaluators_strategy,
+    replications=hst.integers(
         max_value=30
     ),  # TODO: max_value should be increased when parallelising
-    random_state=st.one_of(
-        st.none(),
-        st.integers(min_value=0, max_value=2**32 - 1),
-        st.builds(RandomState),
-    ),
-    groups=st.booleans(),
+    random_state=random_state_strategy,
+    groups=hst.booleans(),
 )
 def test_fuzz_bootstrap_model(
     estimator, X, y, evaluators, replications, random_state, groups
 ):
-    """Simple fuzz-testing to ensure that we can generate random data that yields no exceptions."""
+    """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions."""
     bootstrap_model(
         estimator=estimator,
         X=X,
@@ -273,4 +293,49 @@ def test_fuzz_bootstrap_model(
         replications=replications,
         random_state=random_state,
         groups=groups,
+    )
+
+
+# This test code was written by the `hypothesis.extra.ghostwriter` module
+# and is provided under the Creative Commons Zero public domain dedication.
+
+
+@given(
+    estimator=estimator_strategy,
+    X=X_strategy,
+    y=y_strategy,
+    evaluators=evaluators_strategy,
+    cv=hst.one_of(
+        hst.none(),
+        hst.integers(),
+        hst.builds(LeaveOneOut),
+        hst.builds(KFold),
+        hst.builds(GroupKFold),
+        hst.builds(StratifiedKFold),
+        hst.builds(StratifiedGroupKFold),
+        hst.builds(TimeSeriesSplit),
+        hst.builds(LeaveOneGroupOut),
+    ),
+    random_state=random_state_strategy,
+    stratify=hst.one_of(
+        hst.none(),
+        arrays(
+            dtype=scalar_dtypes(),
+            # TODO: ad-hoc; an array with the same number of els as X/y have rows
+            shape=hst.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(
+                lambda Xy: (Xy[0].shape[0],)
+            ),
+        ),
+    ),
+)
+def test_fuzz_crossval_model(estimator, X, y, evaluators, cv, random_state, stratify):
+    """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions."""
+    crossval_model(
+        estimator=estimator,
+        X=X,
+        y=y,
+        evaluators=evaluators,
+        cv=cv,
+        random_state=random_state,
+        stratify=stratify,
     )
