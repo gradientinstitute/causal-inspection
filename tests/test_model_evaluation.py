@@ -3,13 +3,32 @@
 """Tests for model_evaluation module."""
 import logging
 import numpy as np
+from numpy.random.mtrand import RandomState
 import pandas as pd
+from pandas.core.frame import DataFrame
+from pandas.core.series import Series
 import itertools
 import pytest
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_random_state
+from sklearn.base import BaseEstimator
+from sklearn.dummy import DummyRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection._split import (
+    GroupKFold,
+    KFold,
+    LeaveOneGroupOut,
+    LeaveOneOut,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+    TimeSeriesSplit,
+)
+from hypothesis import given, strategies as st
+from hypothesis.extra.numpy import arrays, scalar_dtypes, array_shapes
+
 from cinspect.model_evaluation import crossval_model, bootstrap_model
 from cinspect.evaluators import Evaluator
+import test_strategies
 
 logger = logging.getLogger()
 
@@ -233,3 +252,35 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
     within_bound = (mean >= bs_mean - bound) and (mean <= bs_mean + bound)
 
     return within_bound
+
+
+# This test code was written by the `hypothesis.extra.ghostwriter` module
+# and is provided under the Creative Commons Zero public domain dedication.
+
+@given(
+    estimator=st.one_of(
+        st.builds(DummyRegressor),
+        st.builds(LinearRegression)
+    ),
+    X=st.shared(test_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0]),
+    y=st.shared(test_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1]),
+    evaluators=st.lists(st.builds(Evaluator)),
+    replications=st.integers(),
+    random_state=st.one_of(st.none(), st.integers(min_value=0, max_value=2**32-1), st.builds(RandomState)),
+    groups=st.booleans(),# TODO: this needs to have same length as to X and y
+)
+def test_fuzz_bootstrap_model(
+    estimator, X, y, evaluators, replications, random_state, groups
+):
+    """
+    Simple fuzz-testing to ensure that we can generate random data that yields no exceptions
+    """
+    bootstrap_model(
+        estimator=estimator,
+        X=X,
+        y=y,
+        evaluators=evaluators,
+        replications=replications,
+        random_state=random_state,
+        groups=groups,
+    )
