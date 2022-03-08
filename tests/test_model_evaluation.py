@@ -10,6 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis.extra.numpy import arrays, scalar_dtypes
 import hypothesis.strategies as hst
+import hypothesis as hyp
 
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
@@ -291,15 +292,21 @@ def test_fuzz_bootstrap_model(
     estimator, X, y, evaluators, replications, random_state, groups
 ):
     """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions."""
-    bootstrap_model(
-        estimator=estimator,
-        X=X,
-        y=y,
-        evaluators=evaluators,
-        replications=replications,
-        random_state=random_state,
-        groups=groups,
-    )
+    try:
+        bootstrap_model(
+            estimator=estimator,
+            X=X,
+            y=y,
+            evaluators=evaluators,
+            replications=replications,
+            random_state=random_state,
+            groups=groups,
+        )
+    except ValueError as ve:
+        # Discard value errors;
+        # basically all overflows or similar due to random data generation
+        logger.warning(ve)
+        hyp.reject()
 
 
 # This test code was written by the `hypothesis.extra.ghostwriter` module
@@ -376,12 +383,18 @@ def filter_by_random_length(draw, to_filter_strat, min_length_strat):
 )
 def test_fuzz_crossval_model(estimator, X, y, evaluators, cv, random_state, stratify):
     """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions."""
-    crossval_model(
-        estimator=estimator,
-        X=X,
-        y=y,
-        evaluators=evaluators,
-        cv=cv,
-        random_state=random_state,
-        stratify=stratify,
-    )
+    try:
+        crossval_model(
+            estimator=estimator,
+            X=X,
+            y=y,
+            evaluators=evaluators,
+            cv=cv,
+            random_state=random_state,
+            stratify=stratify,
+        )
+    except ValueError as ve:
+        # Discard value errors;
+        # basically all overflows or similar due to random data generation
+        logger.warning(ve)
+        hyp.reject()
