@@ -14,7 +14,7 @@ logger = logging.getLogger()
 
 
 @hst.composite
-def Xy_np(draw):
+def Xy_np(draw, n_rows=hst.integers(min_value=1, max_value=100)):
     """Generate sklearn data as numpy arrays.
 
     A `hypothesis` strategy.
@@ -25,18 +25,21 @@ def Xy_np(draw):
     - X and y arrays have at least 1 entry # TODO: weaken assumption on y?
     - X and y arrays have same number of rows.
     """
-    X_shape_strategy = hxt.numpy.array_shapes(
-        min_dims=2, max_dims=2, min_side=1  # don't bother with degenerate
-    )
+    n_rows = draw(n_rows)
+    n_X_cols = draw(hst.integers(min_value=1, max_value=10))
+    n_y_cols = draw(hst.integers(min_value=1, max_value=10))
+    n_y_cols = draw(hst.integers(min_value=1, max_value=10))
 
-    X_shape = draw(X_shape_strategy)
-    y_cols = draw(hst.integers(min_value=1, max_value=10))
-    y_shape = (X_shape[0], y_cols)
+    X_shape = (n_rows, n_X_cols)
+    y_shape = (n_rows, n_y_cols)
+    # logger.info(f"{X_shape}, {y_shape}")
+
     dtype_strategy = hst.one_of(
-        hxt.numpy.boolean_dtypes(),
-        hxt.numpy.integer_dtypes(endianness="<"),  # scipy expects little-endian
-        # hxt.numpy.unsigned_integer_dtypes(),
         hxt.numpy.floating_dtypes(endianness="<"),
+        # TODO: other types
+        # hxt.numpy.boolean_dtypes(),
+        # hxt.numpy.integer_dtypes(endianness="<"),  # scipy expects little-endian
+        # hxt.numpy.unsigned_integer_dtypes(),
         # hxt.numpy.complex_number_dtypes()
     )
 
@@ -51,12 +54,13 @@ def Xy_np(draw):
 
 
 @hst.composite
-def Xy_pd(draw):
+def Xy_pd(draw, n_rows=hst.integers(min_value=1, max_value=100)):
+
     """Generate sklearn data as numeric pandas arrays.
 
     A `hypothesis` strategy`
     """
-    X, y = draw(Xy_np())
+    X, y = draw(Xy_np(n_rows=n_rows))
     X_pd = pd.DataFrame(X)
     y_pd = (
         None if y is None else pd.DataFrame(y)

@@ -257,8 +257,14 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
 estimator_strategy = hst.one_of(
     hst.builds(DummyRegressor), hst.builds(LinearRegression)
 )
-X_strategy = hst.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[0])
-y_strategy = hst.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(lambda Xy: Xy[1])
+
+# Data source strategy for each test
+Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(), key="Xy_pd")
+# derived strategies
+X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
+y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
+
+
 evaluators_strategy = hst.lists(hst.builds(Evaluator))
 random_state_strategy = hst.one_of(
     hst.none(),
@@ -299,33 +305,73 @@ def test_fuzz_bootstrap_model(
 # This test code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
 
+# many cross-val tasks depend on the number of folds
+n_folds = hst.shared(hst.integers(min_value=2, max_value=10), key="n_folds")
+
+
+@hst.composite
+def n_samples(draw, min_bound_strat):
+    # number of samples to draw; bounded from below by the output of the given strategy
+    min_bound = draw(min_bound_strat)
+    n_samples = draw(hst.integers(min_value=min_bound, max_value=100))
+    return n_samples
+
+
+n_rows = hst.shared(
+    # min n_rows = n_folds + 1 ; required by some folds
+    n_samples(min_bound_strat=n_folds.map(lambda n: n + 1)),
+    key="n_rows",
+)
+
+Xy_strategy_shared_bounded = hst.shared(
+    testing_strategies.Xy_pd(n_rows=n_rows), key="Xy_pd_bounded"
+)
+
+# derived strategies
+X_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[0])
+y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
+
+
+@hst.composite
+def filter_by_random_length(draw, to_filter_strat, min_length_strat):
+    # filter strategies by minimum length,
+    min_n = draw(min_length_strat)
+    filtered = draw(to_filter_strat.filter(lambda xs: len(xs) >= min_n))
+    return filtered
+
 
 @given(
     estimator=estimator_strategy,
-    X=X_strategy,
-    y=y_strategy,
+    X=X_strategy_bounded,
+    y=y_strategy_bounded,
     evaluators=evaluators_strategy,
     cv=hst.one_of(
-        hst.none(),
-        hst.integers(),
+        # TODO: None doesn't work if <5 rows
+        # hst.none(),
+        # implicit k-fold; number of folds
+        n_folds,
         hst.builds(LeaveOneOut),
-        hst.builds(KFold),
-        hst.builds(GroupKFold),
-        hst.builds(StratifiedKFold),
-        hst.builds(StratifiedGroupKFold),
-        hst.builds(TimeSeriesSplit),
-        hst.builds(LeaveOneGroupOut),
+        # Most cv objects require a number of folds; 2 <= n_folds <= n_rows
+        hst.builds(KFold, n_splits=n_folds),
+        # TODO: dependence between n_folds and stratification groups
+        #        hst.builds(StratifiedKFold, n_splits=n_folds),
+        # TODO: need to pass groups (indices) parameter if we want to use these
+        #        hst.builds(GroupKFold, n_splits=n_folds),
+        #        hst.builds(StratifiedGroupKFold, n_splits=n_folds),
+        #        hst.builds(LeaveOneGroupOut),
+        hst.builds(TimeSeriesSplit, n_splits=n_folds),
     ),
     random_state=random_state_strategy,
     stratify=hst.one_of(
+        # TODO: None fails if we use a CV that expects stratification
         hst.none(),
-        arrays(
-            dtype=scalar_dtypes(),
-            # TODO: ad-hoc; an array with the same number of els as X/y have rows
-            shape=hst.shared(testing_strategies.Xy_pd(), key="Xy_pd").map(
-                lambda Xy: (Xy[0].shape[0],)
-            ),
-        ),
+        # arrays(
+        #     dtype=scalar_dtypes(),
+        #     # TODO: ad-hoc; an array with the same number of els as X/y have rows
+        #     shape=X_strategy_bounded.map(
+        #         lambda x: (x.shape[0],)
+        #     ),
+        # ),
     ),
 )
 def test_fuzz_crossval_model(estimator, X, y, evaluators, cv, random_state, stratify):
