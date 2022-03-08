@@ -3,32 +3,23 @@
 """Tests for model_evaluation module."""
 import itertools
 import logging
+from typing import Callable
+
+import hypothesis as hyp
+import hypothesis.strategies as hst
 import numpy as np
 import pandas as pd
 import pytest
-
+from cinspect.evaluators import Evaluator
+from cinspect.model_evaluation import bootstrap_model, crossval_model
 from hypothesis import given
-from hypothesis.extra.numpy import arrays, scalar_dtypes
-import hypothesis.strategies as hst
-import hypothesis as hyp
-
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
+# GroupKFold,; LeaveOneGroupOut,; StratifiedGroupKFold,; StratifiedKFold,
+from sklearn.model_selection._split import KFold, LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
-from sklearn.model_selection._split import (
-    GroupKFold,
-    KFold,
-    LeaveOneGroupOut,
-    LeaveOneOut,
-    StratifiedGroupKFold,
-    StratifiedKFold,
-    TimeSeriesSplit,
-)
-
-from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import bootstrap_model, crossval_model
 
 import testing_strategies
 
@@ -255,6 +246,10 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
     return within_bound
 
 
+# ---------- Fuzz-test bootstrap_model -------------
+
+
+# * Helpers *
 estimator_strategy = hst.one_of(
     hst.builds(DummyRegressor), hst.builds(LinearRegression)
 )
@@ -273,10 +268,9 @@ random_state_strategy = hst.one_of(
     hst.builds(RandomState),
 )
 
+
 # Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
-
-
 @given(
     estimator=estimator_strategy,
     X=X_strategy,
@@ -308,28 +302,26 @@ def test_fuzz_bootstrap_model(
         logger.warning(ve)
         hyp.reject()
 
-
-# This test code was written by the `hypothesis.extra.ghostwriter` module
-# and is provided under the Creative Commons Zero public domain dedication.
-
-# many cross-val tasks depend on the number of folds
-n_folds = hst.shared(hst.integers(min_value=2, max_value=10), key="n_folds")
+# ---------- Fuzz-test crossval_model -------------
 
 
 @hst.composite
-def n_samples(draw, min_bound_strat):
-    # number of samples to draw; bounded from below by the output of the given strategy
+def _n_samples(draw: Callable, min_bound_strat: hst.SearchStrategy[int]) -> int:
+    """Generate count of samples to draw; bounded from below by the output of the given strategy."""
     min_bound = draw(min_bound_strat)
     n_samples = draw(hst.integers(min_value=min_bound, max_value=100))
     return n_samples
 
 
+# many cross-val strategies depend on the number of folds;
+# this must be shared between the strategies for each test
+n_folds = hst.shared(hst.integers(min_value=2, max_value=10), key="n_folds")
+
 n_rows = hst.shared(
     # min n_rows = n_folds + 1 ; required by some folds
-    n_samples(min_bound_strat=n_folds.map(lambda n: n + 1)),
+    _n_samples(min_bound_strat=n_folds.map(lambda n: n + 1)),
     key="n_rows",
 )
-
 Xy_strategy_shared_bounded = hst.shared(
     testing_strategies.Xy_pd(n_rows=n_rows), key="Xy_pd_bounded"
 )
@@ -339,30 +331,25 @@ X_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[0])
 y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
 
 
-@hst.composite
-def filter_by_random_length(draw, to_filter_strat, min_length_strat):
-    # filter strategies by minimum length,
-    min_n = draw(min_length_strat)
-    filtered = draw(to_filter_strat.filter(lambda xs: len(xs) >= min_n))
-    return filtered
-
-
+# Some of this code was written by the `hypothesis.extra.ghostwriter` module
+# and is provided under the Creative Commons Zero public domain dedication.
 @given(
     estimator=estimator_strategy,
     X=X_strategy_bounded,
     y=y_strategy_bounded,
     evaluators=evaluators_strategy,
     cv=hst.one_of(
-        # TODO: None doesn't work if <5 rows
+        # TODO: None doesn't work if data has <5 rows
         # hst.none(),
         # implicit k-fold; number of folds
         n_folds,
         hst.builds(LeaveOneOut),
         # Most cv objects require a number of folds; 2 <= n_folds <= n_rows
         hst.builds(KFold, n_splits=n_folds),
-        # TODO: dependence between n_folds and stratification groups
+        # TODO: encode/document the dependence between n_folds and stratification groups
+        #       as this breaks stratification
         #        hst.builds(StratifiedKFold, n_splits=n_folds),
-        # TODO: need to pass groups (indices) parameter if we want to use these
+        # TODO: must to pass groups (indices) parameter if we want to use grouping cvs
         #        hst.builds(GroupKFold, n_splits=n_folds),
         #        hst.builds(StratifiedGroupKFold, n_splits=n_folds),
         #        hst.builds(LeaveOneGroupOut),
