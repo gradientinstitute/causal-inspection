@@ -177,7 +177,7 @@ class _MockLinearEstimator(BaseEstimator):
 
 
 def test_bootstrap_samples_from_eval_distribution(
-    n_bootstraps, n_repeats=10, seed=None
+    n_bootstraps=10, n_repeats=10, seed=None
 ):
     """Test that true mean is in 95%CI of bootstrap samples.
 
@@ -192,8 +192,8 @@ def test_bootstrap_samples_from_eval_distribution(
     This is obviously at the expense of allowing more false passes.
     """
     # generate a sequence of random seeds
-    seed_ = check_random_state(seed)
-    seeds = np.random.default_rng(seed_).integers(10000, size=n_repeats)
+    rng = check_random_state(seed)
+    seeds = rng.randint(0, 10000, size=n_repeats)
     logger.info(f"seeds {seeds}")
 
     within_bound_list = [
