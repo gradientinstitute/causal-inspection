@@ -10,6 +10,7 @@ import hypothesis.extra as hxt
 import hypothesis.strategies as hst
 import numpy as np
 import pandas as pd
+from hypothesis.extra import numpy as hnp
 
 logger = logging.getLogger()
 
@@ -58,8 +59,8 @@ def Xy_np(
     # logger.info(f"{X_shape}, {y_shape}")
 
     dtype_strategy = hst.one_of(
-        hxt.numpy.floating_dtypes(endianness="<"),
-        # TODO: other types
+        hnp.floating_dtypes(endianness="<"),
+        # TODO: re-introduce other types
         # hxt.numpy.boolean_dtypes(),
         # hxt.numpy.integer_dtypes(endianness="<"),  # scipy expects little-endian
         # hxt.numpy.unsigned_integer_dtypes(),
@@ -71,7 +72,7 @@ def Xy_np(
 
     X = draw(X_strategy)
     y = draw(y_strategy)
-    # filter infinities (TODO; this could be made more efficient)
+    # filter infinities (TODO: this could be made more efficient)
     hyp.assume(np.all(np.isfinite(X)))
     hyp.assume(np.all(np.isfinite(y)))
     return X, y
@@ -104,6 +105,6 @@ def Xy_pd(
     X_pd = pd.DataFrame(X)
     y_pd = (
         None if y is None else pd.DataFrame(y)
-    )  # TODO: randomly cast to pd.Series if 1D?
+    )  # TODO: nondeterministically cast to pd.Series if 1D?
 
     return X_pd, y_pd
