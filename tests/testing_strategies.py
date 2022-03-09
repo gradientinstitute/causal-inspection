@@ -44,14 +44,13 @@ def Xy_np(
         Input, output test data
     """
     if n_rows is None:
-        n_rows_ = draw(hst.integers(min_value=1, max_value=100))
+        n_rows_ = draw(hst.integers(min_value=1, max_value=30))
     elif not isinstance(n_rows, int):
         n_rows_ = draw(n_rows)
     else:
         n_rows_ = n_rows
 
-    n_X_cols: int = draw(hst.integers(min_value=1, max_value=10))
-    n_y_cols = draw(hst.integers(min_value=1, max_value=10))
+    n_X_cols = draw(hst.integers(min_value=1, max_value=10))
     n_y_cols = draw(hst.integers(min_value=1, max_value=10))
 
     X_shape = (n_rows_, n_X_cols)
@@ -100,7 +99,7 @@ def Xy_pd(
     (X, y) : Tuple[pd.DataFrame, pd.DataFrame]
         Input, output test data
     """
-    n_rows_ = hst.integers(min_value=1, max_value=100) if n_rows is None else n_rows
+    n_rows_ = hst.integers(min_value=1, max_value=30) if n_rows is None else n_rows
     X, y = draw(Xy_np(n_rows=n_rows_))
     X_pd = pd.DataFrame(X)
     y_pd = (

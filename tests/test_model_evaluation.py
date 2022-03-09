@@ -261,7 +261,7 @@ X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
 y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 
-evaluators_strategy = hst.lists(hst.builds(Evaluator))
+evaluators_strategy = hst.lists(hst.builds(Evaluator), max_size=10)
 random_state_strategy = hst.one_of(
     hst.none(),
     hst.integers(min_value=0, max_value=2**32 - 1),
@@ -277,7 +277,8 @@ random_state_strategy = hst.one_of(
     y=y_strategy,
     evaluators=evaluators_strategy,
     replications=hst.integers(
-        max_value=30
+        min_value=1,
+        max_value=10
     ),  # TODO: max_value should be increased when parallelising
     random_state=random_state_strategy,
     groups=hst.booleans(),
@@ -309,7 +310,7 @@ def test_fuzz_bootstrap_model(
 def _n_samples(draw: Callable, min_bound_strat: hst.SearchStrategy[int]) -> int:
     """Generate count of samples to draw; bounded from below by the output of the given strategy."""
     min_bound = draw(min_bound_strat)
-    n_samples = draw(hst.integers(min_value=min_bound, max_value=100))
+    n_samples = draw(hst.integers(min_value=min_bound, max_value=20))
     return n_samples
 
 
@@ -322,6 +323,8 @@ n_rows = hst.shared(
     _n_samples(min_bound_strat=n_folds.map(lambda n: n + 1)),
     key="n_rows",
 )
+# strategy for generating Xy data with a fixed number of rows
+# (determined by known strategy n_rows)
 Xy_strategy_shared_bounded = hst.shared(
     testing_strategies.Xy_pd(n_rows=n_rows), key="Xy_pd_bounded"
 )
@@ -339,13 +342,11 @@ y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
     y=y_strategy_bounded,
     evaluators=evaluators_strategy,
     cv=hst.one_of(
-        # TODO: None doesn't work if data has <5 rows
-        # hst.none(),
-        # implicit k-fold; number of folds
+        # implicit KFold; number of folds
         n_folds,
         hst.builds(LeaveOneOut),
-        # Most cv objects require a number of folds; 2 <= n_folds <= n_rows
-        hst.builds(KFold, n_splits=n_folds),
+        hst.builds(TimeSeriesSplit, n_splits=n_folds),
+        # hst.builds(KFold, n_splits=n_folds), # k_fold is created implicitly already
         # TODO: encode/document the dependence between n_folds and stratification groups
         #       as this breaks stratification
         #        hst.builds(StratifiedKFold, n_splits=n_folds),
@@ -353,7 +354,8 @@ y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
         #        hst.builds(GroupKFold, n_splits=n_folds),
         #        hst.builds(StratifiedGroupKFold, n_splits=n_folds),
         #        hst.builds(LeaveOneGroupOut),
-        hst.builds(TimeSeriesSplit, n_splits=n_folds),
+        # TODO: None doesn't work if data has <5 rows
+        # hst.none(),
     ),
     random_state=random_state_strategy,
     stratify=hst.one_of(
