@@ -6,6 +6,7 @@ import numbers
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 # from typing import Any, List, Tuple, Optional, Literal
 from scipy.stats.mstats import mquantiles
 
@@ -28,9 +29,10 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
 
     """
     nxcols, ncols, ntypes = X.shape[1], len(columns), len(types)
-    assert nxcols == ncols == ntypes, \
-        f"with of array, len(columns) and len(types) much match, " \
+    assert nxcols == ncols == ntypes, (
+        f"with of array, len(columns) and len(types) much match, "
         f"got {nxcols},{ncols},{ntypes}"
+    )
     d = {}
     for j, c in enumerate(columns):
         ctype = types[c]
@@ -38,8 +40,9 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
     return pd.DataFrame(d)
 
 
-def individual_conditional_expectation(model, X, feature, grid_values,
-                                       predict_method=None):
+def individual_conditional_expectation(
+    model, X, feature, grid_values, predict_method=None
+):
     """
     Compute the ICE curve for a given point.
 
@@ -77,13 +80,17 @@ def individual_conditional_expectation(model, X, feature, grid_values,
     """
     if predict_method is None:
         if hasattr(model, "predict_proba"):
+
             def predict_method(X):
                 return model.predict_proba(X)[:, 1]
+
         elif hasattr(model, "predict"):
             predict_method = model.predict
         else:
-            m = "model does not support predict_proba or predict and no " \
+            m = (
+                "model does not support predict_proba or predict and no "
                 "alternate method specified."
+            )
             raise ValueError(m)
 
     input_df = False  # track if the predictor is expecting a dataframe
@@ -95,7 +102,8 @@ def individual_conditional_expectation(model, X, feature, grid_values,
 
     if not input_df and not isinstance(feature, numbers.Integral):
         raise ValueError(
-            "Features may only be passed as a string if X is a pd.DataFrame")
+            "Features may only be passed as a string if X is a pd.DataFrame"
+        )
 
     values = X[:, feature]
     grid_values, grid_counts = construct_grid(grid_values, values)
@@ -169,29 +177,23 @@ def construct_grid(grid_values, v, auto_threshold=20):
             try:
                 grid = np.linspace(low, high, grid_values)
             except:
-                message = "Could not create grid: " \
-                    f"linspace({low}, {high}, {grid_values})"
+                message = (
+                    "Could not create grid: " f"linspace({low}, {high}, {grid_values})"
+                )
                 raise ValueError(message)
 
     return grid, grid_counts
 
 
 def plot_partial_dependence_density(
-    ax,
-    grid,
-    density,
-    feature_name,
-    categorical,
-    color="black",
-    alpha=0.5
+    ax, grid, density, feature_name, categorical, color="black", alpha=0.5
 ):
     # plot the distribution for of the variable on the second axis
     if categorical:
         x = np.arange(len(grid))
         ax.bar(x, density, color=color, alpha=alpha)
         ax.set_xticks(x)
-        ax.set_xticklabels(grid, rotation=20,
-                           horizontalalignment="right")
+        ax.set_xticklabels(grid, rotation=20, horizontalalignment="right")
         ax.set_ylabel("counts")
 
     else:
@@ -203,19 +205,19 @@ def plot_partial_dependence_density(
 
 
 def plot_partial_dependence_with_uncertainty(
-        grid,
-        predictions,
-        feature_name,
-        categorical=True,
-        density=None,
-        name="",
-        mode="multiple-pd-lines",
-        ax=None,
-        color="black",
-        color_samples="grey",
-        alpha=None,
-        label=None,
-        ci_bounds=(0.025, 0.975)
+    grid,
+    predictions,
+    feature_name,
+    categorical=True,
+    density=None,
+    name="",
+    mode="multiple-pd-lines",
+    ax=None,
+    color="black",
+    color_samples="grey",
+    alpha=None,
+    label=None,
+    ci_bounds=(0.025, 0.975),
 ):
     """
     Parameters
@@ -244,14 +246,16 @@ def plot_partial_dependence_with_uncertainty(
 
     if ax is not None:
         if density is not None:
-            raise ValueError("Plotting dependence with density requires "
-                             "subplots and cannot be added to existing axis.")
+            raise ValueError(
+                "Plotting dependence with density requires "
+                "subplots and cannot be added to existing axis."
+            )
 
     if ax is None:
         if density is not None:
-            fig, axes = plt.subplots(2, 1, figsize=(6, 5),
-                                     gridspec_kw={'height_ratios': [3, 1]},
-                                     sharex=True)
+            fig, axes = plt.subplots(
+                2, 1, figsize=(6, 5), gridspec_kw={"height_ratios": [3, 1]}, sharex=True
+            )
 
             # plot the distribution for of the variable on the second axis
             plot_partial_dependence_density(
@@ -295,7 +299,7 @@ def plot_partial_dependence_with_uncertainty(
         p_all = np.vstack(predictions)
         mu = p_all.mean(axis=0)
         s = p_all.std(axis=0)
-        ax.fill_between(x, mu-s, mu+s, alpha=0.5)
+        ax.fill_between(x, mu - s, mu + s, alpha=0.5)
         ax.plot(x, mu)
 
     elif mode == "derivative" or mode == "interval":
@@ -318,8 +322,7 @@ def plot_partial_dependence_with_uncertainty(
         ax.legend()
 
     else:
-        valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative",
-                       "interval"]
+        valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative", "interval"]
         raise ValueError(f"Unknown mode {mode}. Must be one of: {valid_modes}")
 
     return fig

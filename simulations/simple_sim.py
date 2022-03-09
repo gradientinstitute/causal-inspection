@@ -11,8 +11,10 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 
 from cinspect.model_evaluation import bootstrap_model
-from cinspect.evaluators import (PartialDependanceEvaluator,
-                                 PermutationImportanceEvaluator)
+from cinspect.evaluators import (
+    PartialDependanceEvaluator,
+    PermutationImportanceEvaluator,
+)
 from simulations.datagen import DGPGraph
 
 
@@ -20,10 +22,7 @@ from simulations.datagen import DGPGraph
 LOG = logging.getLogger(__name__)
 
 # Log INFO to STDOUT
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[logging.StreamHandler()]
-)
+logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 
 def data_generation(n_x=30, support_size=5):

@@ -128,7 +128,7 @@ class BinaryTreatmentEffect(Evaluator):
         treatment_column: Union[str, int],
         treatment_val: Any = 1,
         control_val: Any = 0,
-        evaluate_mode: str = "all"
+        evaluate_mode: str = "all",
     ):
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
@@ -231,13 +231,14 @@ class PartialDependanceEvaluator(Evaluator):
         evaluate_mode="all",
         conditional_filter=None,
         filter_name=None,
-        end_transform_indx=None
+        end_transform_indx=None,
     ):
         """Construct a PartialDependanceEvaluator."""
         self.feature_grids = feature_grids
         valid_evaluate_modes = ("all", "test", "train")
-        assert evaluate_mode in valid_evaluate_modes, \
-            f"evaluate_mode must be in {valid_evaluate_modes}"
+        assert (
+            evaluate_mode in valid_evaluate_modes
+        ), f"evaluate_mode must be in {valid_evaluate_modes}"
         self.evaluate_mode = evaluate_mode
         self.conditional_filter = conditional_filter  # callable for filtering X
         self.filter_name = filter_name
@@ -249,7 +250,7 @@ class PartialDependanceEvaluator(Evaluator):
             # we use the X, y information only to select the values over which
             # to compute dependence and to plot the density/counts for each
             # feature.
-            transformer = clone(estimator[0:self.end_transform_indx])
+            transformer = clone(estimator[0 : self.end_transform_indx])
             X = transformer.fit_transform(X, y)
 
         if self.conditional_filter is not None:
@@ -276,7 +277,7 @@ class PartialDependanceEvaluator(Evaluator):
                 grid=grid,
                 density=density,
                 categorical=categorical,
-                predictions=[]
+                predictions=[],
             )
 
         if self.feature_grids is not None:
@@ -302,9 +303,9 @@ class PartialDependanceEvaluator(Evaluator):
 
     def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
         if self.end_transform_indx is not None:
-            transformer = estimator[0:self.end_transform_indx]
+            transformer = estimator[0 : self.end_transform_indx]
             Xt = transformer.transform(X)
-            predictor = estimator[self.end_transform_indx:]
+            predictor = estimator[self.end_transform_indx :]
 
         else:
             predictor = estimator
@@ -321,10 +322,7 @@ class PartialDependanceEvaluator(Evaluator):
             if params.valid:
                 grid = params.grid
                 _, ice, _ = dependence.individual_conditional_expectation(
-                    predictor,
-                    Xt,
-                    feature_indx,
-                    grid
+                    predictor, Xt, feature_indx, grid
                 )
                 params.predictions.append(ice)
 
@@ -334,7 +332,7 @@ class PartialDependanceEvaluator(Evaluator):
         color="black",
         color_samples="grey",
         pd_alpha=None,
-        ci_bounds=(0.025, 0.975)
+        ci_bounds=(0.025, 0.975),
     ):
         figs = []
         for dep in self.dep_params.values():
@@ -343,19 +341,22 @@ class PartialDependanceEvaluator(Evaluator):
                 if self.filter_name is not None:
                     fname = fname + f", filtered by: {self.filter_name}"
                 fig = dependence.plot_partial_dependence_with_uncertainty(
-                    dep.grid, dep.predictions, fname,
+                    dep.grid,
+                    dep.predictions,
+                    fname,
                     density=dep.density,
                     categorical=dep.categorical,
                     mode=mode,
                     color=color,
                     color_samples=color_samples,
                     alpha=pd_alpha,
-                    ci_bounds=ci_bounds
+                    ci_bounds=ci_bounds,
                 )
                 figs.append(fig)
             else:
-                raise RuntimeError(f"Feature {dep.feature_name} is all nan,"
-                                   "nothing to plot.")
+                raise RuntimeError(
+                    f"Feature {dep.feature_name} is all nan," "nothing to plot."
+                )
         return figs
 
 
@@ -391,22 +392,25 @@ class PermutationImportanceEvaluator(Evaluator):
         features=None,
         end_transform_indx=None,
         grouped=False,
-        scorer=None
+        scorer=None,
     ):
         """Construct a permutation importance evaluator."""
-        if not grouped and hasattr(features, "values"):  # flatten the dict if not grouped
+        if not grouped and hasattr(
+            features, "values"
+        ):  # flatten the dict if not grouped
             result = []
             for vals in features.values():
                 result.extend(vals)
             features = result
 
         if grouped and not hasattr(features, "values"):
-            raise ValueError("If features should be grouped they must be "
-                             "specified as a dictionary.")
+            raise ValueError(
+                "If features should be grouped they must be "
+                "specified as a dictionary."
+            )
 
         if grouped and hasattr(features, "values"):  # grouped and passed dict
-            features = {key: value for key, value in features.items()
-                        if len(value) > 0}
+            features = {key: value for key, value in features.items() if len(value) > 0}
 
         self.n_repeats = n_repeats
         self.imprt_samples = []
@@ -415,46 +419,44 @@ class PermutationImportanceEvaluator(Evaluator):
         self.grouped = grouped
         self.scorer = scorer
 
-    def prepare(
-            self,
-            estimator,
-            X,
-            y=None,
-            random_state=None
-    ):
+    def prepare(self, estimator, X, y=None, random_state=None):
         if self.end_transform_indx is not None:
-            transformer = clone(estimator[0:self.end_transform_indx])
+            transformer = clone(estimator[0 : self.end_transform_indx])
             X = transformer.fit_transform(X, y)
 
         if self.grouped:
             self.columns = list(self.features.keys())
-            if all((type(c) == int for cols in self.features.values()
-                    for c in cols)):
+            if all((type(c) == int for cols in self.features.values() for c in cols)):
                 self.feature_indices = self.features
                 self.col_by_name = False
-            elif all((type(c) == str for cols in self.features.values()
-                      for c in cols)):
+            elif all((type(c) == str for cols in self.features.values() for c in cols)):
                 self.feature_indices = {
                     group_key: _get_column_indices_and_names(X, columns)[0]
                     for (group_key, columns) in self.features.items()
                 }
                 self.col_by_name = True
             else:
-                raise ValueError("Groups of columns must either all be int "
-                                 "or str, not a mixture.""")
+                raise ValueError(
+                    "Groups of columns must either all be int "
+                    "or str, not a mixture."
+                    ""
+                )
 
         else:
-            self.feature_indices, self.columns, self.col_by_name = \
-                _get_column_indices_and_names(X, self.features)
+            (
+                self.feature_indices,
+                self.columns,
+                self.col_by_name,
+            ) = _get_column_indices_and_names(X, self.features)
 
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
     def evaluate_test(self, estimator, X, y):
         if self.end_transform_indx is not None:
-            transformer = estimator[0:self.end_transform_indx]
+            transformer = estimator[0 : self.end_transform_indx]
             Xt = transformer.transform(X)
-            predictor = estimator[self.end_transform_indx:]
+            predictor = estimator[self.end_transform_indx :]
 
         else:
             predictor = estimator
@@ -465,36 +467,40 @@ class PermutationImportanceEvaluator(Evaluator):
         if self.grouped:
             feature_indices = self.feature_indices
             if Xt.shape[1] != self.n_original_columns:
-                raise ValueError(f"Data dimension has changed: "
-                                 f"{self.n_original_columns}->{Xt.shape[1]}")
+                raise ValueError(
+                    f"Data dimension has changed: "
+                    f"{self.n_original_columns}->{Xt.shape[1]}"
+                )
         else:
             feature_indices = _check_feature_indices(
                 self.feature_indices,
                 self.col_by_name,
                 self.columns,
                 Xt,
-                self.n_original_columns
+                self.n_original_columns,
             )
 
         imprt = importance.permutation_importance(
-                predictor, Xt, y, n_jobs=1, n_repeats=self.n_repeats,
-                random_state=self.random_state, scoring=self.scorer,
-                features=feature_indices,  # if grouped {str:[int]}
-                grouped=self.grouped
-            )
+            predictor,
+            Xt,
+            y,
+            n_jobs=1,
+            n_repeats=self.n_repeats,
+            random_state=self.random_state,
+            scoring=self.scorer,
+            features=feature_indices,  # if grouped {str:[int]}
+            grouped=self.grouped,
+        )
 
         self.imprt_samples.append(imprt.importances)
 
-    def get_results(
-        self,
-        ntop=10,
-        name=None
-    ):
+    def get_results(self, ntop=10, name=None):
         samples = np.hstack(self.imprt_samples)
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"
-        fig = _plot_importance(samples, ntop, self.columns, title,
-                               xlabel="Permutation Importance")
+        fig = _plot_importance(
+            samples, ntop, self.columns, title, xlabel="Permutation Importance"
+        )
         return fig
 
 
@@ -537,8 +543,10 @@ def _get_column_indices_and_names(X, columns=None):
             names = list(columns)
 
         else:
-            raise ValueError("Cannot extract columns based on non-integer "
-                             "specifiers unless X is a DataFrame.")
+            raise ValueError(
+                "Cannot extract columns based on non-integer "
+                "specifiers unless X is a DataFrame."
+            )
 
     return indices, names, passed_by_name
 
@@ -549,14 +557,13 @@ def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
     imprt_mean = np.mean(imprt_samples, axis=1)
     if topn < 1:
         topn = len(imprt_mean)
-    #abs so it applies to both directional importances (coefficients) and
+    # abs so it applies to both directional importances (coefficients) and
     # positive importances
     order = np.abs(imprt_mean).argsort()[-topn:]
 
     # Plot summaries - top n important features
     fig, ax = plt.subplots(figsize=(15, 10))
-    ax.boxplot(imprt_samples[order].T, vert=False,
-               labels=np.array(columns)[order])
+    ax.boxplot(imprt_samples[order].T, vert=False, labels=np.array(columns)[order])
     ax.set_title(f"{title} - top {topn}")
     if xlabel is not None:
         ax.set_xlabel(xlabel)
@@ -566,8 +573,10 @@ def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
 
 # TODO: these are prime candidates for multiple dispatch
 
-def _check_feature_indices(feature_indices, col_by_name, columns, Xt,
-                           n_expected_columns):
+
+def _check_feature_indices(
+    feature_indices, col_by_name, columns, Xt, n_expected_columns
+):
 
     if col_by_name and hasattr(Xt, "columns"):
         if not all((c in Xt.columns for c in columns)):
@@ -578,9 +587,11 @@ def _check_feature_indices(feature_indices, col_by_name, columns, Xt,
     # we are extracting features by index - the shape cannot have changed.
     else:
         if Xt.shape[1] != n_expected_columns:
-            raise ValueError(f"Data dimension has changed and columns are "
-                             "being selected by index: "
-                             f"{n_expected_columns}->{Xt.shape[1]}")
+            raise ValueError(
+                f"Data dimension has changed and columns are "
+                "being selected by index: "
+                f"{n_expected_columns}->{Xt.shape[1]}"
+            )
 
     return feature_indices
 

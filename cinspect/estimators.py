@@ -55,8 +55,7 @@ class RegressionStatisticalResults(NamedTuple):
         return reprs
 
 
-class _StatMixin():
-
+class _StatMixin:
     def model_statistics(self):
         """Get the coefficient statistics for this estimator."""
         check_is_fitted(self, attributes=["coef_", "coef_se_"])
@@ -65,7 +64,7 @@ class _StatMixin():
             std_err=self.coef_se_,
             dof=self.dof_,
             t_stat=self.t_,
-            p_value=self.p_
+            p_value=self.p_,
         )
         return stats
 
@@ -81,7 +80,7 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
         s2 = ((self._residues / self.dof_) * np.ones(shp)).T
         self.coef_se_ = np.sqrt(linalg.pinv(X.T @ X).diagonal() * s2)
         self.t_ = self.coef_ / self.coef_se_
-        self.p_ = (1. - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
+        self.p_ = (1.0 - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
         return self
 
 
@@ -95,7 +94,7 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
         self.coef_se_ = np.sqrt(self.sigma_.diagonal())
         # NOTE: THIS IS NOT USING THE PROPER POSTERIOR
         self.t_ = self.coef_ / self.coef_se_
-        self.p_ = (1. - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
+        self.p_ = (1.0 - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
         return self
 
 
@@ -146,8 +145,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         self.t_estimator_ = clone(self.estimator)
         self.c_estimator_ = clone(self.estimator)
 
-        Xt, Xc, t_mask = _treatment_split(X, self.treatment_column,
-                                          self.treatment_val)
+        Xt, Xc, t_mask = _treatment_split(X, self.treatment_column, self.treatment_val)
 
         c_mask = ~t_mask
         yt, yc = y[t_mask], y[c_mask]
@@ -162,8 +160,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
     def predict(self, X):
         """Predict the outcomes."""
         check_is_fitted(self, attributes=["t_estimator_", "c_estimator_"])
-        Xt, Xc, t_mask = _treatment_split(X, self.treatment_column,
-                                          self.treatment_val)
+        Xt, Xc, t_mask = _treatment_split(X, self.treatment_column, self.treatment_val)
         Ey = np.zeros(len(X))
         if len(Xt) > 0:
             Ey[t_mask] = self.t_estimator_.predict(Xt)
@@ -177,7 +174,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         return {
             "estimator": self.estimator,
             "treatment_column": self.treatment_column,
-            "treatment_val": self.treatment_val
+            "treatment_val": self.treatment_val,
         }
 
     def set_params(self, **parameters: dict):
@@ -194,7 +191,6 @@ def _treatment_split(X, t_col, t_val):
     Xt = X[t_mask]
     Xc = X[~t_mask]
     return Xt, Xc, t_mask
-
 
 
 @multimethod
