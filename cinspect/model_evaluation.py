@@ -5,6 +5,7 @@
 
 import time
 import logging
+import inspect
 import numpy as np
 import pandas as pd
 
@@ -116,8 +117,13 @@ def bootstrap_model(
         start = time.time()
         Xb, yb, indicesb = resample(X, y, indices)
 
-        if groups:
-            estimator.fit(Xb, yb, groups=indicesb)
+        if groups :
+            if "groups" in inspect.signature(estimator.fit).parameters.keys():
+                estimator.fit(Xb, yb, groups=indicesb)
+            else:
+                LOG.warning("`groups` parameter passed to bootstrap_model, \
+                        but estimator does not support groups. Fitting without groups.")
+                estimator.fit(Xb, yb)
         else:
             estimator.fit(Xb, yb)
 

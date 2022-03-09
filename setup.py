@@ -83,7 +83,8 @@ setup(
             "flake8-quotes",
             "mypy",
             "mypy_extensions",
-            "networkx"
+            "networkx",
+            "hypothesis"
         ]
     }
 )
