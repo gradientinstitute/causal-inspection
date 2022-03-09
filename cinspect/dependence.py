@@ -3,13 +3,12 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
+from typing import Optional, Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-# from typing import Any, List, Tuple, Optional, Literal
 from scipy.stats.mstats import mquantiles
-
 
 # default image type to use for figures TODO delete dependence on this
 IMAGE_TYPE = "png"
@@ -123,23 +122,39 @@ def individual_conditional_expectation(
     return grid_values, pred.T, grid_counts
 
 
-def construct_grid(grid_values, v, auto_threshold=20):
-    """
+def construct_grid(
+    grid_values, v, auto_threshold=20
+) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    """Construct grid from a set of values.
+
+    Parameters
+    ----------
     grid_values: ["auto"|"unique"|int|array]
     v: np.array
         The set of values for the feature
-    auto_threshold: int
+    auto_threshold: int, optional
         how many unique values must a feature exceed to be treated as
         continuous (applied only if grid_values=="auto").
+
+    Returns
+    -------
+    grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
+        Constructed grid, and its counts of unique elements.
+        Returns counts iff grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+
+    Raises
+    ------
+    ValueError
+        If grid cannot be constructed with given arguments
     """
     grid_counts = None
     grid = None
 
     if isinstance(grid_values, np.ndarray):
-        return grid_values, None
+        # check grid_values is not an array,
+        # as np.array==str raises a futurewarning
 
-    # need to check grid_values is not an array first as np.array==str raises a
-    # futurewarning
+        return grid_values, None
     else:
         if grid_values == "auto":  # here I also need to check type of column
             if np.issubdtype(v.dtype, np.number):
@@ -176,7 +191,7 @@ def construct_grid(grid_values, v, auto_threshold=20):
             low, high = np.nanmin(v), np.nanmax(v)
             try:
                 grid = np.linspace(low, high, grid_values)
-            except:
+            except Exception:  # TODO: make more specific
                 message = (
                     "Could not create grid: " f"linspace({low}, {high}, {grid_values})"
                 )
@@ -188,6 +203,10 @@ def construct_grid(grid_values, v, auto_threshold=20):
 def plot_partial_dependence_density(
     ax, grid, density, feature_name, categorical, color="black", alpha=0.5
 ):
+    """Plot partial dependency on ax.
+
+    TODO: proper docstring
+    """
     # plot the distribution for of the variable on the second axis
     if categorical:
         x = np.arange(len(grid))
@@ -219,7 +238,10 @@ def plot_partial_dependence_with_uncertainty(
     label=None,
     ci_bounds=(0.025, 0.975),
 ):
-    """
+    """Plot partial dependence plot with uncertainty estimates.
+
+    TODO: proper docstring.
+
     Parameters
     ----------
     grid: np.array

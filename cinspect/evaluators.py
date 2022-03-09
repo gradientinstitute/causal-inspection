@@ -3,16 +3,18 @@
 """Result evaluator classes."""
 
 import logging
+from collections import defaultdict
+from typing import Any, NamedTuple, Sequence, Union
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from typing import NamedTuple, Union, Sequence, Any
-from collections import defaultdict
 from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
-from cinspect import importance
-from cinspect import dependence
+
+from cinspect import dependence, importance
 
 LOG = logging.getLogger(__name__)
 
@@ -95,6 +97,10 @@ class ScoreEvaluator(Evaluator):
         self.scores = defaultdict(list)
 
     def evaluate_test(self, estimator, X, y):
+        """Evaluate the fitted estimator with test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.groupby is not None:
             groups = X.groupby(self.groupby)
             for group_key, Xs in groups:
@@ -114,13 +120,9 @@ class ScoreEvaluator(Evaluator):
 
 
 class BinaryTreatmentEffect(Evaluator):
-    """Estimate the ATE of a binary treatment.
+    """Estimate average BTE, using estimator to generate counterfactuals.
 
     NOTE: This assumes SUTVA holds.
-
-    Parameters
-    ----------
-
     """
 
     def __init__(
@@ -130,6 +132,19 @@ class BinaryTreatmentEffect(Evaluator):
         control_val: Any = 0,
         evaluate_mode: str = "all",
     ):
+        """Construct BTE estimator.
+
+        Parameters
+        ----------
+        treatment_column : Union[str, int]
+            Treatment variable's column index
+        treatment_val : Any, optional
+            Value of treatment variable when "treated" , by default 1
+        control_val : Any, optional
+            Value of treatment variable when "untreated", by default 0
+        evaluate_mode : str, optional
+            Evaluation mode; "train"/"test"/"all", by default "all"
+        """
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
         self.control_val = control_val
@@ -137,6 +152,10 @@ class BinaryTreatmentEffect(Evaluator):
         self.ate_samples = []
 
     def prepare(self, estimator, X, y, random_state=None):
+        """Prepare the evaluator with model and data information.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         T = X[self.treatment_column]
         assert self.treatment_val in T
         assert self.control_val in T
@@ -158,14 +177,26 @@ class BinaryTreatmentEffect(Evaluator):
         self.ate_samples.append(ate)
 
     def evaluate_all(self, estimator, X, y):
+        """Evaluate the fitted estimator with training and test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.evaluate_mode == "all":
             self._evaluate(estimator, X, y)
 
     def evaluate_train(self, estimator, X, y):
+        """Evaluate the fitted estimator with training data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.evaluate_mode == "train":
             self._evaluate(estimator, X, y)
 
     def evaluate_test(self, estimator, X, y):
+        """Evaluate the fitted estimator with test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.evaluate_mode == "test":
             self._evaluate(estimator, X, y)
 
@@ -195,6 +226,8 @@ class BinaryTreatmentEffect(Evaluator):
 
 
 class Dependance(NamedTuple):
+    """Simple tuple class to hold dependance parameters for PD evaluator."""
+
     valid: bool
     feature_name: str
     grid: Union[str, int, Sequence]
@@ -245,12 +278,16 @@ class PartialDependanceEvaluator(Evaluator):
         self.end_transform_indx = end_transform_indx
 
     def prepare(self, estimator, X, y, random_state=None):
+        """Prepare the evaluator with model and data information.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         # random_state = check_random_state(random_state)
         if self.end_transform_indx is not None:
             # we use the X, y information only to select the values over which
             # to compute dependence and to plot the density/counts for each
             # feature.
-            transformer = clone(estimator[0 : self.end_transform_indx])
+            transformer = clone(estimator[0:self.end_transform_indx])
             X = transformer.fit_transform(X, y)
 
         if self.conditional_filter is not None:
@@ -290,22 +327,34 @@ class PartialDependanceEvaluator(Evaluator):
         self.dep_params = dep_params
 
     def evaluate_all(self, estimator, X, y=None):
+        """Evaluate the fitted estimator with training and test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.evaluate_mode == "all":
             self._evaluate(estimator, X, y)
 
     def evaluate_train(self, estimator, X, y=None):
+        """Evaluate the fitted estimator with training data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.evaluate_mode == "train":
             self._evaluate(estimator, X, y)
 
     def evaluate_test(self, estimator, X, y=None):
+        """Evaluate the fitted estimator with test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.evaluate_mode == "test":
             self._evaluate(estimator, X, y)
 
     def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
         if self.end_transform_indx is not None:
-            transformer = estimator[0 : self.end_transform_indx]
+            transformer = estimator[0:self.end_transform_indx]
             Xt = transformer.transform(X)
-            predictor = estimator[self.end_transform_indx :]
+            predictor = estimator[self.end_transform_indx:]
 
         else:
             predictor = estimator
@@ -333,7 +382,34 @@ class PartialDependanceEvaluator(Evaluator):
         color_samples="grey",
         pd_alpha=None,
         ci_bounds=(0.025, 0.975),
-    ):
+    ) -> list[mpl.figure.Figure]:
+        """Get list of PD plots.
+
+        TODO: finish docstring
+
+        Parameters
+        ----------
+        mode : str, optional
+            _description_, by default "multiple-pd-lines"
+        color : str, optional
+            _description_, by default "black"
+        color_samples : str, optional
+            _description_, by default "grey"
+        pd_alpha : _type_, optional
+            _description_, by default None
+        ci_bounds : tuple, optional
+            _description_, by default (0.025, 0.975)
+
+        Returns
+        -------
+        List[mpl.figure.Figure]
+            List of PD plots; one for each dep param
+
+        Raises
+        ------
+        RuntimeError
+            Raised if a dependency is invalid.
+        """
         figs = []
         for dep in self.dep_params.values():
             if dep.valid:
@@ -420,8 +496,12 @@ class PermutationImportanceEvaluator(Evaluator):
         self.scorer = scorer
 
     def prepare(self, estimator, X, y=None, random_state=None):
+        """Prepare the evaluator with model and data information.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.end_transform_indx is not None:
-            transformer = clone(estimator[0 : self.end_transform_indx])
+            transformer = clone(estimator[0:self.end_transform_indx])
             X = transformer.fit_transform(X, y)
 
         if self.grouped:
@@ -453,10 +533,14 @@ class PermutationImportanceEvaluator(Evaluator):
         self.random_state = random_state
 
     def evaluate_test(self, estimator, X, y):
+        """Evaluate the fitted estimator with test data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         if self.end_transform_indx is not None:
-            transformer = estimator[0 : self.end_transform_indx]
+            transformer = estimator[0:self.end_transform_indx]
             Xt = transformer.transform(X)
-            predictor = estimator[self.end_transform_indx :]
+            predictor = estimator[self.end_transform_indx:]
 
         else:
             predictor = estimator
@@ -494,7 +578,21 @@ class PermutationImportanceEvaluator(Evaluator):
 
         self.imprt_samples.append(imprt.importances)
 
-    def get_results(self, ntop=10, name=None):
+    def get_results(self, ntop=10, name=None) -> mpl.figure.Figure:
+        """Get permutation importance plot.
+
+        Parameters
+        ----------
+        ntop : int, optional
+            Number of features to show on the plot, by default 10
+        name : str, optional
+            Name to place on plot, by default None
+
+        Returns
+        -------
+        mpl.figure.Figure
+            Permutation importance figure
+        """
         samples = np.hstack(self.imprt_samples)
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"

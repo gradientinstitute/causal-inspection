@@ -3,27 +3,28 @@
 """An example of dealing with collinearity in the confounders."""
 
 import logging
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
-
+from cinspect.dimension import effective_rank
+from cinspect.estimators import BinaryTreatmentRegressor
+from cinspect.evaluators import BinaryTreatmentEffect
+from cinspect.model_evaluation import bootstrap_model, crossval_model
+from numpy.typing import ArrayLike
 from scipy.special import expit
 
+# from sklearn.base import clone # required if we add *best* ridge regressor back in
+from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import (
     GridSearchCV,
-    ShuffleSplit,
-    RepeatedKFold,
     GroupKFold,
+    RepeatedKFold,
+    ShuffleSplit,
 )
-from sklearn.kernel_approximation import RBFSampler
-from sklearn.base import clone
 
-from cinspect.model_evaluation import bootstrap_model, crossval_model
-from cinspect.evaluators import BinaryTreatmentEffect
-from cinspect.estimators import BinaryTreatmentRegressor
-from cinspect.dimension import effective_rank
 from simulations.datagen import DGPGraph
-
 
 # Logging
 LOG = logging.getLogger(__name__)
@@ -84,7 +85,14 @@ def data_generation(confounder_dim=200, latent_dim=5):
     return dgp
 
 
-def make_data():
+def make_data() -> Tuple[ArrayLike, ArrayLike]:
+    """Construct collinear simulation data.
+
+    Returns
+    -------
+    (X, y) : Tuple[ArrayLike, ArrayLike]
+        (features, target)
+    """
     n = 500
     dgp = data_generation()
 
@@ -100,6 +108,13 @@ def make_data():
 
 
 def load_synthetic_data():
+    """Load collinear simulation data from disk.
+
+    Returns
+    -------
+    (X, y) : Tuple[ArrayLike, ArrayLike]
+        (features, target)
+    """
     data_file = "../data/synthetic_data.csv"
     data = pd.read_csv(data_file, index_col=0)
     data.drop(columns=["p(t=1)"], inplace=True)
@@ -127,7 +142,7 @@ def main():
     ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": alpha_range}, cv=5)
     ridge_gs.fit(X, Y)
     best_alpha = ridge_gs.best_params_["alpha"]
-    ridge_pre = clone(ridge_gs.best_estimator_)
+    # ridge_pre = clone(ridge_gs.best_estimator_)
     LOG.info(f"Best model R^2 = {ridge_gs.best_score_:.3f}, " f"alpha = {best_alpha}")
 
     models = {

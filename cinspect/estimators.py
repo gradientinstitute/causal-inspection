@@ -2,17 +2,15 @@
 # Licensed under the Apache 2.0 License.
 """Convenience estimators for causal estimation."""
 
+from typing import NamedTuple, Union
+
 import numpy as np
 import pandas as pd
-
-from typing import NamedTuple, Union
 from multimethod import multimethod
-from scipy import linalg
-from scipy import stats
-
+from scipy import linalg, stats
 from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.linear_model import BayesianRidge, LinearRegression
 from sklearn.utils.validation import check_is_fitted
-from sklearn.linear_model import LinearRegression, BayesianRidge
 
 
 class RegressionStatisticalResults(NamedTuple):
@@ -73,6 +71,10 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
     """Scikit learn's LinearRegression estimator with coefficient stats."""
 
     def fit(self, X, y, sample_weight=None):
+        """Fit linear regression model to data.
+
+        TODO: complete docstring
+        """
         super().fit(X, y, sample_weight)
         n, d = X.shape
         self.dof_ = n - d
@@ -88,6 +90,10 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
     """Scikit learn's BayesianRidge estimator with coefficient stats."""
 
     def fit(self, X, y, sample_weight=None):
+        """Fit bayesian ridge estimator to data.
+
+        TODO: complete docstring
+        """
         super().fit(X, y, sample_weight)
         n, d = X.shape
         self.dof_ = n - d  # NOTE: THIS IS AN UNDERESTIMATE
