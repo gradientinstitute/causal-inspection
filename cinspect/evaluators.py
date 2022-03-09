@@ -382,7 +382,7 @@ class PartialDependanceEvaluator(Evaluator):
         color_samples="grey",
         pd_alpha=None,
         ci_bounds=(0.025, 0.975),
-    ) -> list[mpl.figure.Figure]:
+    ) -> Sequence[mpl.figure.Figure]:
         """Get list of PD plots.
 
         TODO: finish docstring
@@ -402,7 +402,7 @@ class PartialDependanceEvaluator(Evaluator):
 
         Returns
         -------
-        List[mpl.figure.Figure]
+        Sequence[mpl.figure.Figure]
             List of PD plots; one for each dep param
 
         Raises
