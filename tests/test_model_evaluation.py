@@ -17,6 +17,7 @@ from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
+
 # GroupKFold,; LeaveOneGroupOut,; StratifiedGroupKFold,; StratifiedKFold,
 from sklearn.model_selection._split import KFold, LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
@@ -124,9 +125,8 @@ model_evaluators = [crossval_model, bootstrap_model]
 random_seeds = [42, np.random.RandomState()]
 
 
-@pytest.mark.parametrize(
-    "eval_func, random_state", itertools.product(model_evaluators, random_seeds)
-)
+@pytest.mark.parametrize("random_state", random_seeds)
+@pytest.mark.parametrize("eval_func", model_evaluators)
 def test_reproducible_function_calls(eval_func, random_state):
     """Test that model evaluator functions produce same output given same input."""
     estimator = _MockEstimator()
@@ -176,31 +176,35 @@ class _MockLinearEstimator(BaseEstimator):
         return y_pred
 
 
-def test_bootstrap_samples_from_eval_distribution(n_repeats=10, seed=42):
+def test_bootstrap_samples_from_eval_distribution(
+    n_bootstraps, n_repeats=10, seed=None
+):
     """Test that true mean is in 95%CI of bootstrap samples.
 
     If there is a very probability that it's not, this test fails.
 
-    This test simply repeats _test_bootstrap_samples_from_eval_distribution
-    and fails if it fails 100% of the time; chance of false failure is 0.05**(n_repeats).
+    This test simply repeats _test_bootstrap_samples_from_eval_distribution n_repeats times,
+    with n_bootstraps bootstraps each time,
+    and fails if it fails 100% of the time; chance of false failure is ~0.05**(n_repeats).
 
     The default of 10 repeats puts us at a 1:1e14 chance of false failure.
 
     This is obviously at the expense of allowing more false passes.
     """
     # generate a sequence of random seeds
-    seeds = np.random.default_rng(seed).integers(10000, size=n_repeats)
+    seed_ = check_random_state(seed)
+    seeds = np.random.default_rng(seed_).integers(10000, size=n_repeats)
     logger.info(f"seeds {seeds}")
 
     within_bound_list = [
-        _test_bootstrap_samples_from_eval_distribution(random_state)
+        _test_bootstrap_samples_from_eval_distribution(n_bootstraps, random_state)
         for random_state in seeds
     ]
 
     assert np.any(within_bound_list)
 
 
-def _test_bootstrap_samples_from_eval_distribution(random_state):
+def _test_bootstrap_samples_from_eval_distribution(n_bootstraps, random_state):
     """Test that true mean is in 95%CI of bootstrap samples.
 
     This is a sanity test of bootstrapping from an Evaluator
@@ -215,14 +219,18 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
     estimator = _MockEstimator()
 
     X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
+    # TODO: parametrise over eval_distribution
     mean = 0
     stdev = 1
+
+    # with 95% probability,
+    # mean in bs_mean +- bound.
+    bound = 1.96 * (stdev / (np.sqrt(n_bootstraps)))
 
     def sample_from_normal(rng):
         return rng.normal(mean, stdev)
 
     evaluator = _MockRandomEvaluator(sample_from_normal)
-    n_bootstrap_replications = 30
 
     # seed from which to generate a sequence of random seeds
     [evaluator_] = bootstrap_model(
@@ -230,16 +238,13 @@ def _test_bootstrap_samples_from_eval_distribution(random_state):
         X,
         y,
         [evaluator],
-        replications=n_bootstrap_replications,
+        replications=n_bootstraps,
         random_state=random_state,
     )
     results = evaluator_.get_results()
     bs_mean = np.mean(results)
 
-    # with 95% probability,
-    # mean in bs_mean +- bound.
-    bound = 1.96 * (stdev / (np.sqrt(n_bootstrap_replications)))
-    logger.info(f"Asserting that {mean} is within {bs_mean} +- {bound}")
+    logger.info(f"Checking that {mean} is within {bs_mean} +- {bound}")
 
     within_bound = (mean >= bs_mean - bound) and (mean <= bs_mean + bound)
 
@@ -277,8 +282,7 @@ random_state_strategy = hst.one_of(
     y=y_strategy,
     evaluators=evaluators_strategy,
     replications=hst.integers(
-        min_value=1,
-        max_value=10
+        min_value=1, max_value=10
     ),  # TODO: max_value should be increased when parallelising
     random_state=random_state_strategy,
     groups=hst.booleans(),
@@ -302,6 +306,7 @@ def test_fuzz_bootstrap_model(
         # basically all overflows or similar due to random data generation
         logger.warning(ve)
         hyp.reject()
+
 
 # ---------- Fuzz-test crossval_model -------------
 
