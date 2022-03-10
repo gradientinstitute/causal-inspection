@@ -3,12 +3,12 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
+from typing import Optional, Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-# from typing import Any, List, Tuple, Optional, Literal
 from scipy.stats.mstats import mquantiles
-
 
 # default image type to use for figures TODO delete dependence on this
 IMAGE_TYPE = "png"
@@ -28,9 +28,10 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
 
     """
     nxcols, ncols, ntypes = X.shape[1], len(columns), len(types)
-    assert nxcols == ncols == ntypes, \
-        f"with of array, len(columns) and len(types) much match, " \
+    assert nxcols == ncols == ntypes, (
+        f"with of array, len(columns) and len(types) much match, "
         f"got {nxcols},{ncols},{ntypes}"
+    )
     d = {}
     for j, c in enumerate(columns):
         ctype = types[c]
@@ -38,8 +39,9 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
     return pd.DataFrame(d)
 
 
-def individual_conditional_expectation(model, X, feature, grid_values,
-                                       predict_method=None):
+def individual_conditional_expectation(
+    model, X, feature, grid_values, predict_method=None
+):
     """
     Compute the ICE curve for a given point.
 
@@ -77,13 +79,17 @@ def individual_conditional_expectation(model, X, feature, grid_values,
     """
     if predict_method is None:
         if hasattr(model, "predict_proba"):
+
             def predict_method(X):
                 return model.predict_proba(X)[:, 1]
+
         elif hasattr(model, "predict"):
             predict_method = model.predict
         else:
-            m = "model does not support predict_proba or predict and no " \
+            m = (
+                "model does not support predict_proba or predict and no "
                 "alternate method specified."
+            )
             raise ValueError(m)
 
     input_df = False  # track if the predictor is expecting a dataframe
@@ -95,7 +101,8 @@ def individual_conditional_expectation(model, X, feature, grid_values,
 
     if not input_df and not isinstance(feature, numbers.Integral):
         raise ValueError(
-            "Features may only be passed as a string if X is a pd.DataFrame")
+            "Features may only be passed as a string if X is a pd.DataFrame"
+        )
 
     values = X[:, feature]
     grid_values, grid_counts = construct_grid(grid_values, values)
@@ -115,23 +122,39 @@ def individual_conditional_expectation(model, X, feature, grid_values,
     return grid_values, pred.T, grid_counts
 
 
-def construct_grid(grid_values, v, auto_threshold=20):
-    """
+def construct_grid(
+    grid_values, v, auto_threshold=20
+) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    """Construct grid from a set of values.
+
+    Parameters
+    ----------
     grid_values: ["auto"|"unique"|int|array]
     v: np.array
         The set of values for the feature
-    auto_threshold: int
+    auto_threshold: int, optional
         how many unique values must a feature exceed to be treated as
         continuous (applied only if grid_values=="auto").
+
+    Returns
+    -------
+    grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
+        Constructed grid, and its counts of unique elements.
+        Returns counts iff grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+
+    Raises
+    ------
+    ValueError
+        If grid cannot be constructed with given arguments
     """
     grid_counts = None
     grid = None
 
     if isinstance(grid_values, np.ndarray):
-        return grid_values, None
+        # check grid_values is not an array,
+        # as np.array==str raises a futurewarning
 
-    # need to check grid_values is not an array first as np.array==str raises a
-    # futurewarning
+        return grid_values, None
     else:
         if grid_values == "auto":  # here I also need to check type of column
             if np.issubdtype(v.dtype, np.number):
@@ -168,30 +191,28 @@ def construct_grid(grid_values, v, auto_threshold=20):
             low, high = np.nanmin(v), np.nanmax(v)
             try:
                 grid = np.linspace(low, high, grid_values)
-            except:
-                message = "Could not create grid: " \
-                    f"linspace({low}, {high}, {grid_values})"
+            except Exception:  # TODO: make more specific
+                message = (
+                    "Could not create grid: " f"linspace({low}, {high}, {grid_values})"
+                )
                 raise ValueError(message)
 
     return grid, grid_counts
 
 
 def plot_partial_dependence_density(
-    ax,
-    grid,
-    density,
-    feature_name,
-    categorical,
-    color="black",
-    alpha=0.5
+    ax, grid, density, feature_name, categorical, color="black", alpha=0.5
 ):
+    """Plot partial dependency on ax.
+
+    TODO: proper docstring
+    """
     # plot the distribution for of the variable on the second axis
     if categorical:
         x = np.arange(len(grid))
         ax.bar(x, density, color=color, alpha=alpha)
         ax.set_xticks(x)
-        ax.set_xticklabels(grid, rotation=20,
-                           horizontalalignment="right")
+        ax.set_xticklabels(grid, rotation=20, horizontalalignment="right")
         ax.set_ylabel("counts")
 
     else:
@@ -203,21 +224,24 @@ def plot_partial_dependence_density(
 
 
 def plot_partial_dependence_with_uncertainty(
-        grid,
-        predictions,
-        feature_name,
-        categorical=True,
-        density=None,
-        name="",
-        mode="multiple-pd-lines",
-        ax=None,
-        color="black",
-        color_samples="grey",
-        alpha=None,
-        label=None,
-        ci_bounds=(0.025, 0.975)
+    grid,
+    predictions,
+    feature_name,
+    categorical=True,
+    density=None,
+    name="",
+    mode="multiple-pd-lines",
+    ax=None,
+    color="black",
+    color_samples="grey",
+    alpha=None,
+    label=None,
+    ci_bounds=(0.025, 0.975),
 ):
-    """
+    """Plot partial dependence plot with uncertainty estimates.
+
+    TODO: proper docstring.
+
     Parameters
     ----------
     grid: np.array
@@ -244,14 +268,16 @@ def plot_partial_dependence_with_uncertainty(
 
     if ax is not None:
         if density is not None:
-            raise ValueError("Plotting dependence with density requires "
-                             "subplots and cannot be added to existing axis.")
+            raise ValueError(
+                "Plotting dependence with density requires "
+                "subplots and cannot be added to existing axis."
+            )
 
     if ax is None:
         if density is not None:
-            fig, axes = plt.subplots(2, 1, figsize=(6, 5),
-                                     gridspec_kw={'height_ratios': [3, 1]},
-                                     sharex=True)
+            fig, axes = plt.subplots(
+                2, 1, figsize=(6, 5), gridspec_kw={"height_ratios": [3, 1]}, sharex=True
+            )
 
             # plot the distribution for of the variable on the second axis
             plot_partial_dependence_density(
@@ -295,7 +321,7 @@ def plot_partial_dependence_with_uncertainty(
         p_all = np.vstack(predictions)
         mu = p_all.mean(axis=0)
         s = p_all.std(axis=0)
-        ax.fill_between(x, mu-s, mu+s, alpha=0.5)
+        ax.fill_between(x, mu - s, mu + s, alpha=0.5)
         ax.plot(x, mu)
 
     elif mode == "derivative" or mode == "interval":
@@ -318,8 +344,7 @@ def plot_partial_dependence_with_uncertainty(
         ax.legend()
 
     else:
-        valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative",
-                       "interval"]
+        valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative", "interval"]
         raise ValueError(f"Unknown mode {mode}. Must be one of: {valid_modes}")
 
     return fig

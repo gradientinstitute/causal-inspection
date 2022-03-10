@@ -2,7 +2,9 @@
 # Licensed under the Apache 2.0 License.
 """Test for the evaluators module."""
 
+""" Stub of imports:
 from cinspect.evaluators import Evaluator, ScoreEvaluator
+"""
 
 
 def test_evaluator_calls():

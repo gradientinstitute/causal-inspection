@@ -14,7 +14,7 @@ def generate_sythetic_approximation(X: np.ndarray) -> np.ndarray:
     The covariance matrix is used to capture all the relationships between variables,
     regardless of whether they are continuous or categorical.
     """
-    c = X.T@X
+    c = X.T @ X
     Xs = np.random.multivariate_normal(X.mean(axis=0), c, size=len(X))
     for col in range(X.shape[1]):
         vals = np.sort(X[:, col])
@@ -23,7 +23,7 @@ def generate_sythetic_approximation(X: np.ndarray) -> np.ndarray:
     return Xs
 
 
-class DGPGraph():
+class DGPGraph:
     """A high level Interface for building Bayesian network data generating processes.
 
     Example
@@ -116,14 +116,16 @@ class DGPGraph():
 
             s = data.shape
 
-            msg = f"Invalid shape {s} from sample({node},n={n_test}). "\
+            msg = (
+                f"Invalid shape {s} from sample({node},n={n_test}). "
                 "Result for {node} must be np.array(n,) or (n, .)"
+            )
 
             if len(s) not in [1, 2]:
                 raise ValueError(msg)
             else:
                 if s[0] != n_test:
-                    raise(ValueError(msg))
+                    raise (ValueError(msg))
 
             shapes[node] = s
 
@@ -139,7 +141,7 @@ class DGPGraph():
         else:
             raise ValueError(f"Shape for {node} must be one or dimensional but was {s}")
 
-        return v*value
+        return v * value
 
     def draw_graph(self):
         """Draw the DAG for the data generating process."""
@@ -186,8 +188,16 @@ class DGPGraph():
         # TODO add standard error in ate
         return ate
 
-    def cate(self, n, treatment_node, outcome_node, condition_node,
-             condition_values, treatment_val=1, control_val=0):
+    def cate(
+        self,
+        n,
+        treatment_node,
+        outcome_node,
+        condition_node,
+        condition_values,
+        treatment_val=1,
+        control_val=0,
+    ):
         """Compute the estimated Conditional Average Treatment Effect from a sample size n."""
         condition_shape = self.shapes[condition_node]
         if len(condition_shape) > 1:
@@ -201,10 +211,12 @@ class DGPGraph():
 
         result = np.zeros(len(condition_values))
         for i, v in enumerate(condition_values):
-            s1 = self.sample(n, interventions={
-                condition_node: v, treatment_node: treatment_val})
-            s0 = self.sample(n, interventions={
-                condition_node: v, treatment_node: control_val})
+            s1 = self.sample(
+                n, interventions={condition_node: v, treatment_node: treatment_val}
+            )
+            s0 = self.sample(
+                n, interventions={condition_node: v, treatment_node: control_val}
+            )
             cate = s1[outcome_node].mean() - s0[outcome_node].mean()
             result[i] = cate
         return result

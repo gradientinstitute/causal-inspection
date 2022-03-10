@@ -27,7 +27,7 @@ def crossval_model(
     evaluators: Sequence[Evaluator],
     cv: Optional[Union[int, BaseCrossValidator]] = None,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    stratify: Optional[Union[np.ndarray, pd.Series]] = None
+    stratify: Optional[Union[np.ndarray, pd.Series]] = None,
 ) -> Sequence[Evaluator]:
     """
     Evaluate a model using cross validation.
@@ -81,7 +81,7 @@ def bootstrap_model(
     evaluators: Sequence[Evaluator],
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    groups: bool = False
+    groups: bool = False,
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -117,12 +117,14 @@ def bootstrap_model(
         start = time.time()
         Xb, yb, indicesb = resample(X, y, indices)
 
-        if groups :
+        if groups:
             if "groups" in inspect.signature(estimator.fit).parameters.keys():
                 estimator.fit(Xb, yb, groups=indicesb)
             else:
-                LOG.warning("`groups` parameter passed to bootstrap_model, \
-                        but estimator does not support groups. Fitting without groups.")
+                LOG.warning(
+                    "`groups` parameter passed to bootstrap_model, \
+                        but estimator does not support groups. Fitting without groups."
+                )
                 estimator.fit(Xb, yb)
         else:
             estimator.fit(Xb, yb)

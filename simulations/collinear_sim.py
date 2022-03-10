@@ -3,32 +3,34 @@
 """An example of dealing with collinearity in the confounders."""
 
 import logging
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
-
+from cinspect.dimension import effective_rank
+from cinspect.estimators import BinaryTreatmentRegressor
+from cinspect.evaluators import BinaryTreatmentEffect
+from cinspect.model_evaluation import bootstrap_model, crossval_model
+from numpy.typing import ArrayLike
 from scipy.special import expit
 
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import (GridSearchCV, ShuffleSplit, RepeatedKFold,
-                                     GroupKFold)
+# from sklearn.base import clone # required if we add *best* ridge regressor back in
 from sklearn.kernel_approximation import RBFSampler
-from sklearn.base import clone
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import (
+    GridSearchCV,
+    GroupKFold,
+    RepeatedKFold,
+    ShuffleSplit,
+)
 
-from cinspect.model_evaluation import bootstrap_model, crossval_model
-from cinspect.evaluators import BinaryTreatmentEffect
-from cinspect.estimators import BinaryTreatmentRegressor
-from cinspect.dimension import effective_rank
 from simulations.datagen import DGPGraph
-
 
 # Logging
 LOG = logging.getLogger(__name__)
 
 # Log INFO to STDOUT
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[logging.StreamHandler()]
-)
+logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 
 TRUE_ATE = 0.3
@@ -53,7 +55,7 @@ def data_generation(confounder_dim=200, latent_dim=5):
     cov_x = A @ A.T / latent_dim
 
     # Projection class
-    rbf = RBFSampler(n_components=confounder_dim, gamma=1.)
+    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0)
     rbf.fit(np.random.randn(2, latent_dim))
 
     # Treatment properties
@@ -83,7 +85,14 @@ def data_generation(confounder_dim=200, latent_dim=5):
     return dgp
 
 
-def make_data():
+def make_data() -> Tuple[ArrayLike, ArrayLike]:
+    """Construct collinear simulation data.
+
+    Returns
+    -------
+    (X, y) : Tuple[ArrayLike, ArrayLike]
+        (features, target)
+    """
     n = 500
     dgp = data_generation()
 
@@ -99,13 +108,20 @@ def make_data():
 
 
 def load_synthetic_data():
+    """Load collinear simulation data from disk.
+
+    Returns
+    -------
+    (X, y) : Tuple[ArrayLike, ArrayLike]
+        (features, target)
+    """
     data_file = "../data/synthetic_data.csv"
     data = pd.read_csv(data_file, index_col=0)
     data.drop(columns=["p(t=1)"], inplace=True)
 
-    Y = data['y'].values
+    Y = data["y"].values
     data.drop(columns=["y"], inplace=True)
-    data.rename(columns={'t': 'T'}, inplace=True)
+    data.rename(columns={"t": "T"}, inplace=True)
     X = data
     return X, Y
 
@@ -126,15 +142,14 @@ def main():
     ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": alpha_range}, cv=5)
     ridge_gs.fit(X, Y)
     best_alpha = ridge_gs.best_params_["alpha"]
-    ridge_pre = clone(ridge_gs.best_estimator_)
-    LOG.info(f"Best model R^2 = {ridge_gs.best_score_:.3f}, "
-             f"alpha = {best_alpha}")
+    # ridge_pre = clone(ridge_gs.best_estimator_)
+    LOG.info(f"Best model R^2 = {ridge_gs.best_score_:.3f}, " f"alpha = {best_alpha}")
 
     models = {
         # "linear": LinearRegression(),
         # "ridge_pre": ridge_pre,
         "ridge_gs": ridge_gs,
-        "btr": BinaryTreatmentRegressor(ridge_gs, "T", 1.)
+        "btr": BinaryTreatmentRegressor(ridge_gs, "T", 1.0),
     }
 
     results = {}
@@ -149,36 +164,33 @@ def main():
         results[name]["Bootstrap"] = bteval.get_results()
 
         # Casual estimation -- KFold
-        bteval = BinaryTreatmentEffect(treatment_column="T",
-                                       evaluate_mode="test")
-        kfold = RepeatedKFold(n_splits=int(round(replications/3)), n_repeats=3)
+        bteval = BinaryTreatmentEffect(treatment_column="T", evaluate_mode="test")
+        kfold = RepeatedKFold(n_splits=int(round(replications / 3)), n_repeats=3)
         crossval_model(mod, X, Y, [bteval], kfold)
         results[name]["KFold"] = bteval.get_results()
 
         # Casual estimation -- ShuffleSplit
-        bteval = BinaryTreatmentEffect(treatment_column="T",
-                                       evaluate_mode="test")
-        crossval_model(mod, X, Y, [bteval],
-                       ShuffleSplit(n_splits=replications))
+        bteval = BinaryTreatmentEffect(treatment_column="T", evaluate_mode="test")
+        crossval_model(mod, X, Y, [bteval], ShuffleSplit(n_splits=replications))
         results[name]["ShuffleSplit"] = bteval.get_results()
 
     # We have to make sure we use GroupKFold with GridSearchCV here so we don't
     # get common samples in the train and test folds
-    ridge_gs_g = GridSearchCV(Ridge(),
-                              param_grid={"alpha": alpha_range},
-                              cv=GroupKFold(n_splits=5))
+    ridge_gs_g = GridSearchCV(
+        Ridge(), param_grid={"alpha": alpha_range}, cv=GroupKFold(n_splits=5)
+    )
 
     if "ridge_gs" in models:
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(ridge_gs, X, Y, [bteval], replications=replications,
-                        groups=True)
+        bootstrap_model(
+            ridge_gs, X, Y, [bteval], replications=replications, groups=True
+        )
         results["ridge_gs"]["Bootstrap-group"] = bteval.get_results()
 
     if "btr" in models:
-        btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.)
+        btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.0)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(btr, X, Y, [bteval], replications=replications,
-                        groups=True)
+        bootstrap_model(btr, X, Y, [bteval], replications=replications, groups=True)
         results["btr"]["Bootstrap-group"] = bteval.get_results()
 
     # Print results:

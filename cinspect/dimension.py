@@ -26,10 +26,10 @@ def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:
 
 
     """
-    u, s, v = np.linalg.svd(X.T@X)
+    u, s, v = np.linalg.svd(X.T @ X)
     norm_s = np.abs(s).sum()
-    p = s/norm_s
-    H = -(p*np.log(p)).sum()
+    p = s / norm_s
+    H = -(p * np.log(p)).sum()
     erank = np.exp(H)
     return float(erank)
 
@@ -38,7 +38,7 @@ def greedy_feature_selection(
     X: np.ndarray,
     maximise_metric: Callable[[np.ndarray], float],
     initial_col: Optional[int] = None,
-    num_to_select: int = 10
+    num_to_select: int = 10,
 ) -> Tuple[List[int], List[float]]:
     """
     Repeatedly select features to maximise the specified metric.

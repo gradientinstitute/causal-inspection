@@ -1,7 +1,6 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Tests for model_evaluation module."""
-import itertools
 import logging
 from typing import Callable
 
@@ -18,8 +17,8 @@ from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
 
-# GroupKFold,; LeaveOneGroupOut,; StratifiedGroupKFold,; StratifiedKFold,
-from sklearn.model_selection._split import KFold, LeaveOneOut, TimeSeriesSplit
+# KFold,; GroupKFold,; LeaveOneGroupOut,; StratifiedGroupKFold,; StratifiedKFold,
+from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
 
 import testing_strategies

@@ -17,8 +17,9 @@ from sklearn.utils import Bunch, check_array, check_random_state
 from sklearn.utils.validation import _deprecate_positional_args
 
 
-def _calculate_permutation_scores(estimator, X, y, col_idx, random_state,
-                                  n_repeats, scorer):
+def _calculate_permutation_scores(
+    estimator, X, y, col_idx, random_state, n_repeats, scorer
+):
     """Calculate score when `col_idx` is permuted."""
     random_state = check_random_state(random_state)
 
@@ -50,18 +51,23 @@ def _check_feature_dict_valid(features):
     for f_list in features.values():
         for f in f_list:
             if f in result:
-                raise ValueError("features must not be duplicated, even "
-                                 f"under different groups, got:{features}")
+                raise ValueError(
+                    "features must not be duplicated, even "
+                    f"under different groups, got:{features}"
+                )
             if type(f) != int:
-                raise ValueError("keys must map to lists of integers, "
-                                 f"got:{features}")
+                raise ValueError(
+                    "keys must map to lists of integers, " f"got:{features}"
+                )
             result.append(f)
 
 
 def _check_feature_list_valid(features):
     if not all((type(c) == int for c in features)):
-        error_msg = "features must be supplied as a list must all be " \
-                    f"integers, got:{features}"
+        error_msg = (
+            "features must be supplied as a list must all be "
+            f"integers, got:{features}"
+        )
         raise ValueError(error_msg)
 
 
@@ -83,7 +89,7 @@ def permutation_importance(
     n_jobs=None,
     random_state=None,
     features=None,
-    grouped=False
+    grouped=False,
 ):
     """Permutation importance for feature evaluation [BRE]_.
 
@@ -176,14 +182,12 @@ def permutation_importance(
         X = check_array(X, force_all_finite="allow-nan", dtype=None)
 
     if grouped:
-        error_msg = "if grouped is true, features must be passed as a " \
-            "dictionary"
-        assert (hasattr(features, "keys") and
-                hasattr(features, "values")), error_msg
+        error_msg = "if grouped is true, features must be passed as a " "dictionary"
+        assert hasattr(features, "keys") and hasattr(features, "values"), error_msg
         _check_feature_dict_valid(features)
 
     elif features is not None:
-        if (hasattr(features, "keys") and hasattr(features, "values")):
+        if hasattr(features, "keys") and hasattr(features, "values"):
             _check_feature_dict_valid(features)
             features = _flatten_feature_dict(features)
 
@@ -208,11 +212,16 @@ def permutation_importance(
     else:
         column_indexes = features  # each col_indx will be an int
 
-    scores = Parallel(n_jobs=n_jobs)(delayed(_calculate_permutation_scores)(
-        estimator, X, y, col_idx, random_seed, n_repeats, scorer
-    ) for col_idx in column_indexes)
+    scores = Parallel(n_jobs=n_jobs)(
+        delayed(_calculate_permutation_scores)(
+            estimator, X, y, col_idx, random_seed, n_repeats, scorer
+        )
+        for col_idx in column_indexes
+    )
 
     importances = baseline_score - np.array(scores)
-    return Bunch(importances_mean=np.mean(importances, axis=1),
-                 importances_std=np.std(importances, axis=1),
-                 importances=importances)
+    return Bunch(
+        importances_mean=np.mean(importances, axis=1),
+        importances_std=np.std(importances, axis=1),
+        importances=importances,
+    )
