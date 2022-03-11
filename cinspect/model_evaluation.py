@@ -104,26 +104,27 @@ def bootstrap_model(
     for ev in evaluators:
         ev.prepare(estimator, X, y, random_state=random_state)
 
-    LOG.info("Bootstrapping ...")
+    # Check if estimator supports group keyword
+    spec = inspect.getfullargspec(estimator.fit)
+    if not ("groups" in spec.args) or (spec.varkw is not None):
+        LOG.warning(
+            "`groups` parameter passed to bootstrap_model, but "
+            "estimator doesn't support groups. Fitting without groups."
+        )
+        groups = False
 
     indices = np.arange(len(X))
+
+    LOG.info("Bootstrapping ...")
 
     # Bootstrapping loop
     for i in range(replications):
         LOG.info(f"Bootstrap round {i + 1}")
         start = time.time()
-        Xb, yb, indicesb = resample(X, y, indices)
+        Xb, yb, indicesb = resample(X, y, indices, random_state=random_state)
 
         if groups:
-            spec = inspect.getfullargspec(estimator.fit)
-            if ("groups" in spec.args) or (spec.varkw is not None):
-                estimator.fit(Xb, yb, groups=indicesb)
-            else:
-                LOG.warning(
-                    "`groups` parameter passed to bootstrap_model, but "
-                    "estimator doesn't support groups. Fitting without groups."
-                )
-                estimator.fit(Xb, yb)
+            estimator.fit(Xb, yb, groups=indicesb)
         else:
             estimator.fit(Xb, yb)
 
@@ -138,3 +139,86 @@ def bootstrap_model(
         ev.aggregate()
 
     return evaluators
+
+
+def bootcross_model(
+    estimator: BaseEstimator,
+    X: pd.DataFrame,
+    y: Union[pd.DataFrame, pd.Series],
+    evaluators: Sequence[Evaluator],
+    replications: int = 100,
+    test_size: Union[int, float] = 0.25,
+    random_state: Optional[Union[int, np.random.RandomState]] = None,
+    groups: bool = False,
+) -> Sequence[Evaluator]:
+    """
+    Use bootstrapping to compute random train/test folds (no sample sharing).
+
+    A list of evaluators determines what statistics are computed with the
+    crossed bootstrap samples.
+
+    Parameters
+    ----------
+    groups: bool
+        This inputs the indices of the re-sampled datasets into the estimator
+        as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
+        This can only be used with e.g. `GridSearchCV` where `cv` is
+        `GroupKFold`. This stops the same sample appearing in both the test and
+        training splits of any inner cross validation.
+    """
+    n = len(X)
+    if isinstance(test_size, float):
+        if test_size <= 0 or test_size >= 1:
+            raise ValueError("test_size must be between (0, 1)")
+        test_size = max(int(round(test_size * n)), 1)
+    elif isinstance(test_size, int):
+        if test_size <= 0 or test_size >= n:
+            raise ValueError("test_size must be within the size of X")
+
+    random_state = check_random_state(random_state)
+    for ev in evaluators:
+        ev.prepare(estimator, X, y, random_state=random_state)
+
+    # Check if estimator supports group keyword
+    spec = inspect.getfullargspec(estimator.fit)
+    if not ("groups" in spec.args) or (spec.varkw is not None):
+        LOG.warning(
+            "`groups` parameter passed to bootstrap_model, but "
+            "estimator doesn't support groups. Fitting without groups."
+        )
+        groups = False
+
+    LOG.info("Bootstrap crossing...")
+
+    # Bootstrapping loop
+    for i in range(replications):
+        LOG.info(f"Bootstrap cross round {i + 1}")
+        start = time.time()
+        tri, tsi = _bootcross_split(n, test_size, random_state)
+
+        if groups:
+            estimator.fit(X[tri], y[tri], groups=tri)
+        else:
+            estimator.fit(X[tri], y[tri])
+
+        for ev in evaluators:
+            ev.evaluate(estimator, X[tsi], y[tsi])
+
+        end = time.time()
+        LOG.info(f"... iteration time {end - start:.2f}s")
+
+    LOG.info("Bootstrapping crossing done.")
+
+    for ev in evaluators:
+        ev.aggregate()
+
+    return evaluators
+
+
+def _bootcross_split(data_size, test_size, random_state):
+    permind = random_state.permutation(data_size)
+    test_ind = permind[:test_size]
+    train_ind = permind[test_size:]
+    test_boot = resample(test_ind, random_state=random_state)
+    train_boot = resample(train_ind, random_state=random_state)
+    return train_boot, test_boot
