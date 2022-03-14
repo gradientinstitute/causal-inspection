@@ -58,11 +58,9 @@ def crossval_model(
             ys, yr = y.iloc[sind], y.iloc[rind]
         else:
             ys, yr = y[sind], y[rind]
-        estimator.fit(Xr, yr)  # training data
+        estimator.fit(Xr, yr)
         for ev in evaluators:
-            ev.evaluate_test(estimator, Xs, ys)
-            ev.evaluate_train(estimator, Xr, yr)
-            ev.evaluate_all(estimator, X, y)
+            ev.evaluate(estimator, Xs, ys)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
 
@@ -89,17 +87,16 @@ def bootstrap_model(
     A list of evaluators determines what statistics are computed with the
     bootstrap samples.
 
-    The same bootstrap samples of X and y are passed to `evaluate_train`,
-    `evaluate_test` and `evaluate_all`.
+    The same sample are passed into `fit` and `evaluate`.
 
     Parameters
     ----------
     groups: bool
-       input the indices of the re-sampled datasets into the estimator as
-       `estimator.fit(X_resample, y_resample, groups=indices_resample)`. This
-       can only be used with e.g. `GridSearchCV` where `cv` is `GroupKFold`.
-       This stops the same sample appearing in both the test and training
-       splits of any inner cross validation.
+        This inputs the indices of the re-sampled datasets into the estimator
+        as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
+        This can only be used with e.g. `GridSearchCV` where `cv` is
+        `GroupKFold`. This stops the same sample appearing in both the test and
+        training splits of any inner cross validation.
     """
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
@@ -118,21 +115,20 @@ def bootstrap_model(
         Xb, yb, indicesb = resample(X, y, indices)
 
         if groups:
-            if "groups" in inspect.signature(estimator.fit).parameters.keys():
+            spec = inspect.getfullargspec(estimator.fit)
+            if ("groups" in spec.args) or (spec.varkw is not None):
                 estimator.fit(Xb, yb, groups=indicesb)
             else:
                 LOG.warning(
-                    "`groups` parameter passed to bootstrap_model, \
-                        but estimator does not support groups. Fitting without groups."
+                    "`groups` parameter passed to bootstrap_model, but "
+                    "estimator doesn't support groups. Fitting without groups."
                 )
                 estimator.fit(Xb, yb)
         else:
             estimator.fit(Xb, yb)
 
         for ev in evaluators:
-            ev.evaluate_train(estimator, Xb, yb)
-            ev.evaluate_test(estimator, Xb, yb)
-            ev.evaluate_all(estimator, Xb, yb)
+            ev.evaluate(estimator, Xb, yb)
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
 

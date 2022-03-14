@@ -18,10 +18,6 @@ from cinspect import dependence, importance
 
 LOG = logging.getLogger(__name__)
 
-# TODO: Make aggregate functions store results internally, and not save
-# anything. If we want to save, we should have a separate save method, and not
-# produce side-effects.
-
 
 class Evaluator:
     """Abstract class for Evaluators to inherit from."""
@@ -33,22 +29,8 @@ class Evaluator:
         """
         pass
 
-    def evaluate_test(self, estimator, X=None, y=None):
-        """Evaluate the fitted estimator with test data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        pass
-
-    def evaluate_train(self, estimator, X, y):
-        """Evaluate the fitted estimator with training data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        pass
-
-    def evaluate_all(self, estimator, X, y=None):
-        """Evaluate the fitted estimator with training and test data.
+    def evaluate(self, estimator, X, y=None):
+        """Evaluate the fitted estimator with test, training or all data.
 
         This is called by a model evaluation function in model_evaluation.
         """
@@ -96,8 +78,8 @@ class ScoreEvaluator(Evaluator):
         self.groupby = groupby
         self.scores = defaultdict(list)
 
-    def evaluate_test(self, estimator, X, y):
-        """Evaluate the fitted estimator with test data.
+    def evaluate(self, estimator, X, y):
+        """Evaluate the fitted estimator with data.
 
         This is called by a model evaluation function in model_evaluation.
         """
@@ -148,7 +130,6 @@ class BinaryTreatmentEffect(Evaluator):
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
         self.control_val = control_val
-        self.evaluate_mode = evaluate_mode
         self.ate_samples = []
 
     def prepare(self, estimator, X, y, random_state=None):
@@ -160,7 +141,11 @@ class BinaryTreatmentEffect(Evaluator):
         assert self.treatment_val in T
         assert self.control_val in T
 
-    def _evaluate(self, estimator, X, y):
+    def evaluate(self, estimator, X, y=None):
+        """Estimate the binary treatment effect on input data.
+
+        This is called by a model evaluation function in model_evaluation.
+        """
         # Copy covariates so we can manipulate the treatment
         Xc = X.copy()
 
@@ -175,30 +160,6 @@ class BinaryTreatmentEffect(Evaluator):
         # ATE
         ate = np.mean(Ey_treated - Ey_control)
         self.ate_samples.append(ate)
-
-    def evaluate_all(self, estimator, X, y):
-        """Evaluate the fitted estimator with training and test data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        if self.evaluate_mode == "all":
-            self._evaluate(estimator, X, y)
-
-    def evaluate_train(self, estimator, X, y):
-        """Evaluate the fitted estimator with training data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        if self.evaluate_mode == "train":
-            self._evaluate(estimator, X, y)
-
-    def evaluate_test(self, estimator, X, y):
-        """Evaluate the fitted estimator with test data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        if self.evaluate_mode == "test":
-            self._evaluate(estimator, X, y)
 
     def get_results(self, ci_probs=(0.025, 0.975)):
         """Get the statistics of the ATE.
@@ -261,18 +222,12 @@ class PartialDependanceEvaluator(Evaluator):
     def __init__(
         self,
         feature_grids=None,
-        evaluate_mode="all",
         conditional_filter=None,
         filter_name=None,
         end_transform_indx=None,
     ):
         """Construct a PartialDependanceEvaluator."""
         self.feature_grids = feature_grids
-        valid_evaluate_modes = ("all", "test", "train")
-        assert (
-            evaluate_mode in valid_evaluate_modes
-        ), f"evaluate_mode must be in {valid_evaluate_modes}"
-        self.evaluate_mode = evaluate_mode
         self.conditional_filter = conditional_filter  # callable for filtering X
         self.filter_name = filter_name
         self.end_transform_indx = end_transform_indx
@@ -326,31 +281,11 @@ class PartialDependanceEvaluator(Evaluator):
 
         self.dep_params = dep_params
 
-    def evaluate_all(self, estimator, X, y=None):
-        """Evaluate the fitted estimator with training and test data.
+    def evaluate(self, estimator, X, y=None):  # called on the fit estimator
+        """Evaluate the fitted estimator with input data.
 
         This is called by a model evaluation function in model_evaluation.
         """
-        if self.evaluate_mode == "all":
-            self._evaluate(estimator, X, y)
-
-    def evaluate_train(self, estimator, X, y=None):
-        """Evaluate the fitted estimator with training data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        if self.evaluate_mode == "train":
-            self._evaluate(estimator, X, y)
-
-    def evaluate_test(self, estimator, X, y=None):
-        """Evaluate the fitted estimator with test data.
-
-        This is called by a model evaluation function in model_evaluation.
-        """
-        if self.evaluate_mode == "test":
-            self._evaluate(estimator, X, y)
-
-    def _evaluate(self, estimator, X, y=None):  # called on the fit estimator
         if self.end_transform_indx is not None:
             transformer = estimator[0:self.end_transform_indx]
             Xt = transformer.transform(X)
@@ -532,8 +467,8 @@ class PermutationImportanceEvaluator(Evaluator):
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
-    def evaluate_test(self, estimator, X, y):
-        """Evaluate the fitted estimator with test data.
+    def evaluate(self, estimator, X, y):
+        """Evaluate the fitted estimator with input data.
 
         This is called by a model evaluation function in model_evaluation.
         """

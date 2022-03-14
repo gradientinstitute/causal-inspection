@@ -100,7 +100,7 @@ def permutation_importance(
     dataset defined by the `X`. Next, a feature column from the validation set
     is permuted and the metric is evaluated again. The permutation importance
     is defined to be the difference between the baseline metric and metric from
-    permutating the feature column.
+    permuting the feature column.
 
     Read more in the :ref:`User Guide <permutation_importance>`.
 
@@ -137,14 +137,14 @@ def permutation_importance(
         See :term: `Glossary <random_state>`.
 
     features: [int] or {str:[int]}, default=None
-        Either a list of feature indices for which importance should be computed
-        or a dictionary from name -> list of indices. If a dictionary and `grouped` is true
-        then features corresponding to the same key will be permuted together.
-        By default, compute importance for all features.
+        Either a list of feature indices for which importance should be
+        computed or a dictionary from name -> list of indices. If a dictionary
+        and `grouped` is true then features corresponding to the same key will
+        be permuted together. By default, compute importance for all features.
 
     grouped: bool, default=False
-        Should the supplied features be permuted together within specified groups.
-        If True, features must be supplied as a dict.
+        Should the supplied features be permuted together within specified
+        groups. If True, features must be supplied as a dict.
 
     Returns
     -------

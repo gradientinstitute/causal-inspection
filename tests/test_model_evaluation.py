@@ -40,39 +40,23 @@ class _MockEstimator(BaseEstimator):
 
 class _MockEvaluator(Evaluator):
     def __init__(self):
-        self.eval_all = False
-        self.eval_test = False
-        self.eval_train = False
+        self.eval = False
         self.prepare_call = False
         self.aggregate_call = False
 
     def prepare(self, estimator, X, y=None, random_state=None):
         assert not estimator.is_fitted
-        assert not self.eval_all
-        assert not self.eval_train
-        assert not self.eval_test
+        assert not self.eval
         assert not self.aggregate_call
         self.prepare_call = True
 
-    def evaluate_all(self, estimator, X, y=None):
+    def evaluate(self, estimator, X, y=None):
         assert estimator.is_fitted
         assert not self.aggregate_call
-        self.eval_all = True
-
-    def evaluate_test(self, estimator, X=None, y=None):
-        assert estimator.is_fitted
-        assert not self.aggregate_call
-        self.eval_test = True
-
-    def evaluate_train(self, estimator, X, y):
-        assert estimator.is_fitted
-        assert not self.aggregate_call
-        self.eval_train = True
+        self.eval = True
 
     def aggregate(self, name=None, estimator_score=None, outdir=None):
-        assert self.eval_all
-        assert self.eval_train
-        assert self.eval_test
+        assert self.eval
         self.aggregate_call = True
 
 
@@ -101,7 +85,7 @@ class _MockRandomEvaluator(Evaluator):
         """Initialise using data; in this case, only the random state is used."""
         self._random_state = random_state
 
-    def _evaluate(self, estimator, X, y):
+    def evaluate(self, estimator, X, y):
         """Evaluate estimator; in this case, the evaluation is random."""
         # pass through/seed/create new rng as appropriate
         self._random_state = check_random_state(self._random_state)
@@ -110,10 +94,6 @@ class _MockRandomEvaluator(Evaluator):
         self._results.append(result)
 
         return result
-
-    evaluate_all = _evaluate
-    evaluate_train = _evaluate
-    evaluate_test = _evaluate
 
     def get_results(self):
         """Return (random) evaluation."""
