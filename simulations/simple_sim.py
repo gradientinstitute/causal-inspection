@@ -3,20 +3,19 @@
 """Example of how to use the causal inspection tools with simple models."""
 
 import logging
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import GridSearchCV
-
-from cinspect.model_evaluation import bootstrap_model
 from cinspect.evaluators import (
     PartialDependanceEvaluator,
     PermutationImportanceEvaluator,
 )
-from simulations.datagen import DGPGraph
+from cinspect.model_evaluation import bootstrap_model
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GridSearchCV
 
+from simulations.datagen import DGPGraph
 
 # Logging
 LOG = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 
-def data_generation(n_x=30, support_size=5):
+def data_generation(n_x=30, support_size=5, alpha=0.3):
     """Specify the data generation process.
 
     This is just a simple "triangle" model with linear relationships.
@@ -38,7 +37,7 @@ def data_generation(n_x=30, support_size=5):
     This is for a *continuous* treatment variable.
 
     """
-    alpha = 0.3
+
     coefs_T = np.zeros(n_x)
     coefs_T[0:support_size] = np.random.normal(1, 1, size=support_size)
 
