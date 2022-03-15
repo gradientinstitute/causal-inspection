@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import GridSearchCV, GroupKFold
 
-from cinspect.model_evaluation import bootstrap_model
+from cinspect.model_evaluation import bootcross_model
 from cinspect.evaluators import (
     PartialDependanceEvaluator,
     PermutationImportanceEvaluator,
@@ -93,24 +93,20 @@ def main():
     data.update({f"X{i}": x for i, x in enumerate(dX.T)})
     X = pd.DataFrame(data)
 
-    # NOTE: The following assumes we only want uncertainty in the model
-    # _parameters_ and that we are happy to go with a point estimate for the
-    # hyper-parameters (alpha - regularisation strength). If we also want
-    # uncertainty over the hyper-parameters, then we need to use a separate
-    # procedure, like cross-fitting. It's probably not okay to just put the grid
-    # search inside the bootstrapping sampler.
-
     # Model selection
-    model = GridSearchCV(Ridge(), param_grid={"alpha": [1e-2, 1e-1, 1, 10]})
-    model.fit(X, Y)
-    best_alpha = model.best_params_["alpha"]
-    best_model = model.best_estimator_
-    LOG.info(f"Best model R^2 = {model.best_score_:.3f}, alpha = {best_alpha}")
+    # GroupKFold is used to make sure grid search does not use the same samples
+    # from the bootstrapping procedure later in the training and testing folds
+    model = GridSearchCV(
+        GradientBoostingRegressor(),
+        param_grid={"max_depth": [1, 2]},
+        cv=GroupKFold(n_splits=5)
+    )
 
     # Casual estimation
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
     pieval = PermutationImportanceEvaluator(n_repeats=5)
-    bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
+    bootcross_model(model, X, Y, [pdeval, pieval], replications=30,
+                    groups=True)  # Note groups=True for GroupKFold
 
     pdeval.get_results(mode="interval")
     pdeval.get_results(mode="derivative")
