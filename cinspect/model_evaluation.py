@@ -9,6 +9,7 @@ import inspect
 import numpy as np
 import pandas as pd
 
+from functools import singledispatch
 from typing import Union, Optional, Sequence
 from sklearn.model_selection import KFold
 from sklearn.utils import resample, check_random_state
@@ -35,32 +36,27 @@ def crossval_model(
     A list of evaluators determines what other metrics, such as feature
     importance and partial dependence are computed
     """
+    # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
+    for ev in evaluators:
+        ev.prepare(estimator, X, y, random_state=random_state)
+
     cv = 5 if cv is None else cv
     if isinstance(cv, int):
         cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
-
-    # Runs code that requires the full set of data to be available For example
-    # to select the range over which partial dependence should be shown.
-    for ev in evaluators:
-        ev.prepare(estimator, X, y, random_state=random_state)
 
     LOG.info("Validating ...")
 
     for i, (rind, sind) in enumerate(cv.split(X, stratify)):
         LOG.info(f"Validation round {i + 1}")
         start = time.time()
-        if hasattr(X, "iloc"):
-            Xs, Xr = X.iloc[sind], X.iloc[rind]
-        else:
-            Xs, Xr = X[sind], X[rind]
-        if hasattr(y, "iloc"):
-            ys, yr = y.iloc[sind], y.iloc[rind]
-        else:
-            ys, yr = y[sind], y[rind]
+
+        Xr, Xs = _split_data(X, rind, sind)
+        yr, ys = _split_data(y, rind, sind)
         estimator.fit(Xr, yr)
         for ev in evaluators:
             ev.evaluate(estimator, Xs, ys)
+
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
 
@@ -98,22 +94,12 @@ def bootstrap_model(
         `GroupKFold`. This stops the same sample appearing in both the test and
         training splits of any inner cross validation.
     """
-    # Runs code that requires the full set of data to be available For example
-    # to select the range over which partial dependence should be shown.
+    # Run various checks and prepare the evaluators
+    indices = np.arange(len(X))
     random_state = check_random_state(random_state)
+    groups = _check_group_estimator(estimator, groups)
     for ev in evaluators:
         ev.prepare(estimator, X, y, random_state=random_state)
-
-    # Check if estimator supports group keyword
-    spec = inspect.getfullargspec(estimator.fit)
-    if not ("groups" in spec.args) or (spec.varkw is not None):
-        LOG.warning(
-            "`groups` parameter passed to bootstrap_model, but "
-            "estimator doesn't support groups. Fitting without groups."
-        )
-        groups = False
-
-    indices = np.arange(len(X))
 
     LOG.info("Bootstrapping ...")
 
@@ -121,15 +107,12 @@ def bootstrap_model(
     for i in range(replications):
         LOG.info(f"Bootstrap round {i + 1}")
         start = time.time()
-        Xb, yb, indicesb = resample(X, y, indices, random_state=random_state)
 
-        if groups:
-            estimator.fit(Xb, yb, groups=indicesb)
-        else:
-            estimator.fit(Xb, yb)
-
+        Xb, yb, indb = resample(X, y, indices, random_state=random_state)
+        estimator.fit(Xb, yb, groups=indb) if groups else estimator.fit(Xb, yb)
         for ev in evaluators:
             ev.evaluate(estimator, Xb, yb)
+
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
 
@@ -175,18 +158,11 @@ def bootcross_model(
         if test_size <= 0 or test_size >= n:
             raise ValueError("test_size must be within the size of X")
 
+    # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
+    groups = _check_group_estimator(estimator, groups)
     for ev in evaluators:
         ev.prepare(estimator, X, y, random_state=random_state)
-
-    # Check if estimator supports group keyword
-    spec = inspect.getfullargspec(estimator.fit)
-    if not ("groups" in spec.args) or (spec.varkw is not None):
-        LOG.warning(
-            "`groups` parameter passed to bootstrap_model, but "
-            "estimator doesn't support groups. Fitting without groups."
-        )
-        groups = False
 
     LOG.info("Bootstrap crossing...")
 
@@ -194,15 +170,13 @@ def bootcross_model(
     for i in range(replications):
         LOG.info(f"Bootstrap cross round {i + 1}")
         start = time.time()
+
         tri, tsi = _bootcross_split(n, test_size, random_state)
-
-        if groups:
-            estimator.fit(X[tri], y[tri], groups=tri)
-        else:
-            estimator.fit(X[tri], y[tri])
-
+        Xr, Xs = _split_data(X, tri, tsi)
+        yr, ys = _split_data(y, tri, tsi)
+        estimator.fit(Xr, yr, groups=tri) if groups else estimator.fit(Xr, yr)
         for ev in evaluators:
-            ev.evaluate(estimator, X[tsi], y[tsi])
+            ev.evaluate(estimator, Xs, ys)
 
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
@@ -215,6 +189,19 @@ def bootcross_model(
     return evaluators
 
 
+def _check_group_estimator(estimator, groups):
+    if groups:
+        # Check if estimator supports group keyword
+        spec = inspect.getfullargspec(estimator.fit)
+        if ("groups" not in spec.args) and (spec.varkw is None):
+            LOG.warning(
+                "`groups` parameter passed to bootstrap_model, but "
+                "estimator doesn't support groups. Fitting without groups."
+            )
+            groups = False
+    return groups
+
+
 def _bootcross_split(data_size, test_size, random_state):
     permind = random_state.permutation(data_size)
     test_ind = permind[:test_size]
@@ -222,3 +209,21 @@ def _bootcross_split(data_size, test_size, random_state):
     test_boot = resample(test_ind, random_state=random_state)
     train_boot = resample(train_ind, random_state=random_state)
     return train_boot, test_boot
+
+
+@singledispatch
+def _split_data(data, train_ind, test_ind):
+    raise TypeError(f"Array type {type(data)} not recognised.")
+
+
+@_split_data.register(np.ndarray)
+def _(data, train_ind, test_ind):
+    data_r, data_s = data[train_ind], data[test_ind]
+    return data_r, data_s
+
+
+@_split_data.register(pd.DataFrame)
+@_split_data.register(pd.Series)
+def _(data, train_ind, test_ind):
+    data_r, data_s = data.iloc[train_ind], data.iloc[test_ind]
+    return data_r, data_s

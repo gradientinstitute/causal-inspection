@@ -129,7 +129,7 @@ def load_synthetic_data():
 def main():
     """Run the simulation."""
     alpha_range = np.logspace(-1, 4, 30)
-    replications = 6
+    replications = 10
 
     # X, Y = load_synthetic_data()
     X, Y = make_data()
@@ -183,8 +183,7 @@ def main():
     if "ridge_gs" in models:
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(
-            ridge_gs, X, Y, [bteval], replications=replications,
-            cross_eval=True
+            ridge_gs, X, Y, [bteval], replications=replications, groups=True
         )
         results["ridge_gs"]["Bootstrap-group"] = bteval.get_results()
 
@@ -192,7 +191,7 @@ def main():
         btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.0)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(
-            btr, X, Y, [bteval], replications=replications, cross_eval=True
+            btr, X, Y, [bteval], replications=replications, groups=True
         )
         results["btr"]["Bootstrap-group"] = bteval.get_results()
 
