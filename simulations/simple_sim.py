@@ -23,7 +23,7 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 
-def data_generation(n_x=30, support_size=5, random_state=None):
+def data_generation(alpha=0.3, n_x=30, support_size=5, random_state=None):
     """Specify the data generation process.
 
     This is just a simple "triangle" model with linear relationships.
@@ -37,7 +37,6 @@ def data_generation(n_x=30, support_size=5, random_state=None):
 
     """
     rng = check_random_state(random_state)
-    alpha = 0.3
     coefs_T = np.zeros(n_x)
     coefs_T[0:support_size] = rng.normal(1, 1, size=support_size)
 

@@ -32,7 +32,7 @@ def test_linear_binary_ate(
     estimator = estimators.LinearRegressionStat()
     treatment_value = 1
     control_value = 0
-    dgp = simple_sim.data_generation(n_x=n_x, support_size=support_size, alpha=alpha)
+    dgp = simple_sim.data_generation(n_x=n_x, support_size=support_size, alpha=alpha, random_state=0)
     training_data = dgp.sample(n_train_samples)
     testing_data = dgp.sample(n_test_samples)
     true_ate = dgp.ate(
