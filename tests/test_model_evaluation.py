@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import bootstrap_model, crossval_model
+from cinspect.model_evaluation import (bootstrap_model, crossval_model,
+    bootcross_model, _bootcross_split)
 from hypothesis import given
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
@@ -60,7 +61,10 @@ class _MockEvaluator(Evaluator):
         self.aggregate_call = True
 
 
-@pytest.mark.parametrize("eval_func", [crossval_model, bootstrap_model])
+model_evaluators = [crossval_model, bootstrap_model, bootcross_model]
+
+
+@pytest.mark.parametrize("eval_func", model_evaluators)
 def test_eval_function_calls(eval_func):
     """Test the model evaluator functions are being called correctly."""
     estimator = _MockEstimator()
@@ -100,7 +104,6 @@ class _MockRandomEvaluator(Evaluator):
         return self._results
 
 
-model_evaluators = [crossval_model, bootstrap_model]
 random_seeds = [42, np.random.RandomState()]
 
 
@@ -230,6 +233,24 @@ def _test_bootstrap_samples_from_eval_distribution(n_bootstraps, random_state):
     return within_bound
 
 
+@pytest.mark.parametrize("random_state", random_seeds)
+@pytest.mark.parametrize("test_size", [100, 300])
+def test_bootcross_split(random_state, test_size):
+    """Make sure the bootstrap - splitting is working as intended."""
+    N = 1000
+    random_state = check_random_state(random_state)
+    tri, tsi = _bootcross_split(N, test_size, random_state)
+    
+    # Test size of test set
+    assert len(tsi) == test_size
+
+    # Make sure training and testing are not overlapping
+    train_set = set(tri)
+    test_set = set(tsi)
+    for x in train_set:
+        assert x not in test_set
+
+
 # ---------- Fuzz-test bootstrap_model -------------
 
 
@@ -269,7 +290,7 @@ random_state_strategy = hst.one_of(
 def test_fuzz_bootstrap_model(
     estimator, X, y, evaluators, replications, random_state, groups
 ):
-    """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions."""
+    """Simple fuzz-testing to ensure that we can run bootstrap_model without exceptions."""
     try:
         bootstrap_model(
             estimator=estimator,
@@ -286,6 +307,57 @@ def test_fuzz_bootstrap_model(
         logger.warning(ve)
         hyp.reject()
 
+
+# ---------- Fuzz-test bootcross_model -------------
+
+
+# Data source strategy for each test
+n = 100
+Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n),
+                                key="Xy_pd")
+
+# derived strategies
+X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
+y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
+
+test_size_strategy = hst.one_of(
+    hst.integers(min_value=1, max_value=n - 1),
+    hst.floats(min_value=1. / n, max_value=99. / n),
+)
+
+
+@given(
+    estimator=estimator_strategy,
+    X=X_strategy,
+    y=y_strategy,
+    evaluators=evaluators_strategy,
+    replications=hst.integers(
+        min_value=1, max_value=10
+    ),  # TODO: max_value should be increased when parallelising
+    test_size=test_size_strategy,
+    random_state=random_state_strategy,
+    groups=hst.booleans(),
+)
+def test_fuzz_bootcross_model(
+    estimator, X, y, evaluators, replications, test_size, random_state, groups
+):
+    """Simple fuzz-testing to ensure that we can run bootcross_model without exceptions."""
+    try:
+        bootcross_model(
+            estimator=estimator,
+            X=X,
+            y=y,
+            evaluators=evaluators,
+            replications=replications,
+            test_size=test_size,
+            random_state=random_state,
+            groups=groups,
+        )
+    except ValueError as ve:
+        # Discard value errors;
+        # basically all overflows or similar due to random data generation
+        logger.warning(ve)
+        hyp.reject()
 
 # ---------- Fuzz-test crossval_model -------------
 

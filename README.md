@@ -113,6 +113,9 @@ pieval.get_results(ntop=5)  # Permutation importance, show top 5 features
 plt.show()
 ```
 
+See `simulations/simple_sim.py` for a slightly more complex version where we
+integrate model selection within the bootstrap sampling procedure.
+
 
 References
 ----------

@@ -23,6 +23,7 @@ from sklearn.model_selection import (
     RepeatedKFold,
     ShuffleSplit,
 )
+from sklearn.utils import check_random_state
 
 from simulations.datagen import DGPGraph
 
@@ -36,7 +37,7 @@ logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 TRUE_ATE = 0.3
 
 
-def data_generation(confounder_dim=200, latent_dim=5):
+def data_generation(confounder_dim=200, latent_dim=5, random_state=None):
     """Specify the data generation process.
 
     This is just a simple "triangle" model with linear relationships.
@@ -49,34 +50,35 @@ def data_generation(confounder_dim=200, latent_dim=5):
     This is for a *binary* treatment variable.
 
     """
+    rng = check_random_state(random_state)
     # Confounder latent distribution
     mu_x = np.zeros(latent_dim)
-    A = np.random.randn(latent_dim, latent_dim)
+    A = rng.randn(latent_dim, latent_dim)
     cov_x = A @ A.T / latent_dim
 
     # Projection class
-    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0)
-    rbf.fit(np.random.randn(2, latent_dim))
+    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0, random_state=random_state)
+    rbf.fit(rng.randn(2, latent_dim))
 
     # Treatment properties
-    W_xt = np.random.randn(confounder_dim) / np.sqrt(confounder_dim)
+    W_xt = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
 
     # Target properties
     std_y = 0.5
     W_ty = TRUE_ATE  # true casual effect
-    W_xy = np.random.randn(confounder_dim) / np.sqrt(confounder_dim)
+    W_xy = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
 
     def fX(n):
-        Xo = np.random.multivariate_normal(mean=mu_x, cov=cov_x, size=n)
+        Xo = rng.multivariate_normal(mean=mu_x, cov=cov_x, size=n)
         X = rbf.transform(Xo)
         return X
 
     def fT(X, n):
         pt = expit(X @ W_xt)
-        return np.random.binomial(n=1, p=pt, size=n)
+        return rng.binomial(n=1, p=pt, size=n)
 
     def fY(X, T, n):
-        return W_ty * T + X @ W_xy + std_y * np.random.randn(n)
+        return W_ty * T + X @ W_xy + std_y * rng.randn(n)
 
     dgp = DGPGraph()
     dgp.add_node("X", fX)
@@ -129,7 +131,7 @@ def load_synthetic_data():
 def main():
     """Run the simulation."""
     alpha_range = np.logspace(-1, 4, 30)
-    replications = 6
+    replications = 10
 
     # X, Y = load_synthetic_data()
     X, Y = make_data()
@@ -183,17 +185,14 @@ def main():
     if "ridge_gs" in models:
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
         bootstrap_model(
-            ridge_gs, X, Y, [bteval], replications=replications,
-            cross_eval=True
+            ridge_gs, X, Y, [bteval], replications=replications, groups=True
         )
         results["ridge_gs"]["Bootstrap-group"] = bteval.get_results()
 
     if "btr" in models:
         btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.0)
         bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(
-            btr, X, Y, [bteval], replications=replications, cross_eval=True
-        )
+        bootstrap_model(btr, X, Y, [bteval], replications=replications, groups=True)
         results["btr"]["Bootstrap-group"] = bteval.get_results()
 
     # Print results:
