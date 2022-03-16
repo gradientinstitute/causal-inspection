@@ -10,18 +10,13 @@ import numpy as np
 import pandas as pd
 import pytest
 from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import (
-    bootstrap_model,
-    crossval_model,
-    bootcross_model,
-    _bootcross_split,
-)
+from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
+                                       bootstrap_model, crossval_model)
 from hypothesis import given
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
-
 # KFold,; GroupKFold,; LeaveOneGroupOut,; StratifiedGroupKFold,; StratifiedKFold,
 from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
@@ -316,7 +311,7 @@ def test_fuzz_bootstrap_model(
 
 
 # Data source strategy for each test
-n = 100
+n = 30  # Number of rows. Setting this too high may make test generation prohibitively slow
 Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n), key="Xy_pd")
 
 # derived strategies
@@ -325,7 +320,7 @@ y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 test_size_strategy = hst.one_of(
     hst.integers(min_value=1, max_value=n - 1),
-    hst.floats(min_value=1.0 / n, max_value=99.0 / n),
+    hst.floats(min_value=1.0 / n, max_value=(n-1.0) / n),
 )
 
 

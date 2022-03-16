@@ -36,7 +36,7 @@ def Xy_np(
         Passed in by hst.composite decorator to construct a composite strategy
     n_rows : Optional[Union[int, hst.SearchStrategy[int]]], optional
         Number of data rows. If strategy, draw from it. If None, draw from default
-        strategy; integer between 1 and 100. By default None
+        strategy; integer between 1 and 30. By default None
 
     Returns
     -------
@@ -92,7 +92,7 @@ def Xy_pd(
         Passed in by hst.composite decorator to construct a composite strategy
     n_rows : Optional[Union[int, hst.SearchStrategy[int]]], optional
         Number of data rows. If strategy, draw from it. If None, draw from default
-        strategy; integer between 1 and 100. By default None
+        strategy; integer between 1 and 30. By default None
 
     Returns
     -------
