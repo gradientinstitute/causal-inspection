@@ -3,20 +3,20 @@
 """Example of how to use the causal inspection tools with simple models."""
 
 import logging
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import GridSearchCV, GroupKFold
-
-from cinspect.model_evaluation import bootcross_model
 from cinspect.evaluators import (
     PartialDependanceEvaluator,
     PermutationImportanceEvaluator,
 )
-from simulations.datagen import DGPGraph
+from cinspect.model_evaluation import bootcross_model
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import GridSearchCV, GroupKFold
+from sklearn.utils import check_random_state
 
+from simulations.datagen import DGPGraph
 
 # Logging
 LOG = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 
-def data_generation(n_x=30, support_size=5):
+def data_generation(n_x=30, support_size=5, random_state=None):
     """Specify the data generation process.
 
     This is just a simple "triangle" model with linear relationships.
@@ -38,21 +38,22 @@ def data_generation(n_x=30, support_size=5):
     This is for a *continuous* treatment variable.
 
     """
+    rng = check_random_state(random_state)
     alpha = 0.3
     coefs_T = np.zeros(n_x)
-    coefs_T[0:support_size] = np.random.normal(1, 1, size=support_size)
+    coefs_T[0:support_size] = rng.normal(1, 1, size=support_size)
 
     coefs_Y = np.zeros(n_x)
-    coefs_Y[0:support_size] = np.random.uniform(0, 1, size=support_size)
+    coefs_Y[0:support_size] = rng.uniform(0, 1, size=support_size)
 
     def fX(n):
-        return np.random.normal(0, 1, size=(n, n_x))
+        return rng.normal(0, 1, size=(n, n_x))
 
     def fT(X, n):
-        return X @ coefs_T + np.random.uniform(-1, 1, size=n)
+        return X @ coefs_T + rng.uniform(-1, 1, size=n)
 
     def fY(X, T, n):
-        return alpha * T + X @ coefs_Y + np.random.uniform(-1, 1, size=n)
+        return alpha * T + X @ coefs_Y + rng.uniform(-1, 1, size=n)
 
     dgp = DGPGraph()
     dgp.add_node("X", fX)
@@ -99,14 +100,15 @@ def main():
     model = GridSearchCV(
         GradientBoostingRegressor(),
         param_grid={"max_depth": [1, 2]},
-        cv=GroupKFold(n_splits=5)
+        cv=GroupKFold(n_splits=5),
     )
 
     # Casual estimation
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
     pieval = PermutationImportanceEvaluator(n_repeats=5)
-    bootcross_model(model, X, Y, [pdeval, pieval], replications=30,
-                    groups=True)  # Note groups=True for GroupKFold
+    bootcross_model(
+        model, X, Y, [pdeval, pieval], replications=30, groups=True
+    )  # Note groups=True for GroupKFold
 
     pdeval.get_results(mode="interval")
     pdeval.get_results(mode="derivative")
