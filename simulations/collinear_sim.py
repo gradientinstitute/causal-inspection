@@ -13,16 +13,11 @@ from cinspect.evaluators import BinaryTreatmentEffect
 from cinspect.model_evaluation import bootstrap_model, crossval_model
 from numpy.typing import ArrayLike
 from scipy.special import expit
-
 # from sklearn.base import clone # required if we add *best* ridge regressor back in
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import (
-    GridSearchCV,
-    GroupKFold,
-    RepeatedKFold,
-    ShuffleSplit,
-)
+from sklearn.model_selection import (GridSearchCV, GroupKFold, RepeatedKFold,
+                                     ShuffleSplit)
 from sklearn.utils import check_random_state
 
 from simulations.datagen import DGPGraph
@@ -57,7 +52,7 @@ def data_generation(confounder_dim=200, latent_dim=5, random_state=None):
     cov_x = A @ A.T / latent_dim
 
     # Projection class
-    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0)
+    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0, random_state=random_state)
     rbf.fit(rng.randn(2, latent_dim))
 
     # Treatment properties

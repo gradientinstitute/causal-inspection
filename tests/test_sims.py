@@ -3,7 +3,7 @@ import hypothesis as hyp
 import numpy as np
 from hypothesis import given
 from hypothesis import strategies as st
-from simulations import simple_sim
+from simulations import collinear_sim, simple_sim
 
 
 @st.composite
@@ -29,13 +29,13 @@ def test_simple_data_generation_deterministic(n_x, support_size, random_state):
 
 
 @given(
-    confounder_dims=st.shared(n_x_support_strat(), key="nxs").map(lambda tup: tup[0]),
-    latent_dims=st.shared(n_x_support_strat(), key="nxs").map(lambda tup: tup[1]),
+    confounder_dims=st.integers(min_value=1, max_value=100),# st.shared(n_x_support_strat(), key="nxs").map(lambda tup: tup[0]),
+    latent_dims=st.integers(min_value=1, max_value=100), #st.shared(n_x_support_strat(), key="nxs").map(lambda tup: tup[1]),
     random_state=st.one_of(st.integers(min_value=0, max_value=2**32 - 1)),
 )
 def test_collinear_data_generation_deterministic(confounder_dims, latent_dims, random_state):
-    result = simple_sim.data_generation(confounder_dims, latent_dims, random_state)
-    repeat = simple_sim.data_generation(confounder_dims, latent_dims, random_state)
+    result = collinear_sim.data_generation(confounder_dims, latent_dims, random_state)
+    repeat = collinear_sim.data_generation(confounder_dims, latent_dims, random_state)
     # sample from the dgps and compare samples for equality
     X_res = result.sample(100)
     X_rep = repeat.sample(100)
