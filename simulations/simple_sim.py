@@ -7,8 +7,10 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from cinspect.evaluators import (PartialDependanceEvaluator,
-                                 PermutationImportanceEvaluator)
+from cinspect.evaluators import (
+    PartialDependanceEvaluator,
+    PermutationImportanceEvaluator,
+)
 from cinspect.model_evaluation import bootcross_model
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV, GroupKFold

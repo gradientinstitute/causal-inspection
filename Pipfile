@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+causal-inspection = {editable = true, extras = ["dev"], path = "."}
+black = "*"
+hypothesis = {extras = ["numpy"], version = "*"}
+pytest-profiling = "*"
+snakeviz = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"

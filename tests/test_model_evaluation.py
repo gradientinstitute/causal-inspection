@@ -10,8 +10,12 @@ import numpy as np
 import pandas as pd
 import pytest
 from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import (bootstrap_model, crossval_model,
-    bootcross_model, _bootcross_split)
+from cinspect.model_evaluation import (
+    bootstrap_model,
+    crossval_model,
+    bootcross_model,
+    _bootcross_split,
+)
 from hypothesis import given
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
@@ -240,7 +244,7 @@ def test_bootcross_split(random_state, test_size):
     N = 1000
     random_state = check_random_state(random_state)
     tri, tsi = _bootcross_split(N, test_size, random_state)
-    
+
     # Test size of test set
     assert len(tsi) == test_size
 
@@ -313,8 +317,7 @@ def test_fuzz_bootstrap_model(
 
 # Data source strategy for each test
 n = 100
-Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n),
-                                key="Xy_pd")
+Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n), key="Xy_pd")
 
 # derived strategies
 X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
@@ -322,7 +325,7 @@ y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 test_size_strategy = hst.one_of(
     hst.integers(min_value=1, max_value=n - 1),
-    hst.floats(min_value=1. / n, max_value=99. / n),
+    hst.floats(min_value=1.0 / n, max_value=99.0 / n),
 )
 
 
@@ -358,6 +361,7 @@ def test_fuzz_bootcross_model(
         # basically all overflows or similar due to random data generation
         logger.warning(ve)
         hyp.reject()
+
 
 # ---------- Fuzz-test crossval_model -------------
 
