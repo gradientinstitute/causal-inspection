@@ -16,14 +16,14 @@ from scipy.special import expit
 
 # from sklearn.base import clone # required if we add *best* ridge regressor back in
 from sklearn.kernel_approximation import RBFSampler
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, LinearRegression
 from sklearn.model_selection import (
     GridSearchCV,
-    GroupKFold,
     RepeatedKFold,
     ShuffleSplit,
 )
 from sklearn.utils import check_random_state
+from sklearn.base import clone
 
 from simulations.datagen import DGPGraph
 
@@ -144,12 +144,12 @@ def main():
     ridge_gs = GridSearchCV(Ridge(), param_grid={"alpha": alpha_range}, cv=5)
     ridge_gs.fit(X, Y)
     best_alpha = ridge_gs.best_params_["alpha"]
-    # ridge_pre = clone(ridge_gs.best_estimator_)
+    ridge_pre = clone(ridge_gs.best_estimator_)
     LOG.info(f"Best model R^2 = {ridge_gs.best_score_:.3f}, " f"alpha = {best_alpha}")
 
     models = {
-        # "linear": LinearRegression(),
-        # "ridge_pre": ridge_pre,
+        "linear": LinearRegression(),
+        "ridge_pre": ridge_pre,
         "ridge_gs": ridge_gs,
         "btr": BinaryTreatmentRegressor(ridge_gs, "T", 1.0),
     }
@@ -175,25 +175,6 @@ def main():
         bteval = BinaryTreatmentEffect(treatment_column="T", evaluate_mode="test")
         crossval_model(mod, X, Y, [bteval], ShuffleSplit(n_splits=replications))
         results[name]["ShuffleSplit"] = bteval.get_results()
-
-    # We have to make sure we use GroupKFold with GridSearchCV here so we don't
-    # get common samples in the train and test folds
-    ridge_gs_g = GridSearchCV(
-        Ridge(), param_grid={"alpha": alpha_range}, cv=GroupKFold(n_splits=5)
-    )
-
-    if "ridge_gs" in models:
-        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(
-            ridge_gs, X, Y, [bteval], replications=replications, groups=True
-        )
-        results["ridge_gs"]["Bootstrap-group"] = bteval.get_results()
-
-    if "btr" in models:
-        btr = BinaryTreatmentRegressor(ridge_gs_g, "T", 1.0)
-        bteval = BinaryTreatmentEffect(treatment_column="T")  # all data used
-        bootstrap_model(btr, X, Y, [bteval], replications=replications, groups=True)
-        results["btr"]["Bootstrap-group"] = bteval.get_results()
 
     # Print results:
     LOG.info(f"True ATE: {TRUE_ATE:.3f}")
