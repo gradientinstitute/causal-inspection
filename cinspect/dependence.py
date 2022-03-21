@@ -3,7 +3,7 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,7 +41,7 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
 
 def individual_conditional_expectation(
     model, X, feature, grid_values, predict_method=None
-):
+) -> np.ndarray:
     """
     Compute the ICE curve for a given point.
 
@@ -56,26 +56,21 @@ def individual_conditional_expectation(
     feature: int
         the index of the feature for which we want to compute the ICE.
 
-    grid_values: int or np.array of type float
+    grid_values: int or ndarray of type float
         the range of values for the specified feature over which we want to
         compute the curve. if an int is passed uses a linear grid of length
         grid_values from the minimum to the maximum.
 
-    predict_method: method on model (optional)
+    predict_method: callable method on model (optional)
         The method to call to predict.
         Defaults to predict_proba for classifiers and predict for regressors.
 
 
     Returns
     -------
-    grid_values: np.array
-        the input range of values for the feature
-
-    predictions: 2d np.array
+    predictions: 2d ndarray
         the model predictions, where the specified feature is set to the
         corresponding value in grid_values
-
-    grid_counts:
     """
     if predict_method is None:
         if hasattr(model, "predict_proba"):
@@ -86,11 +81,10 @@ def individual_conditional_expectation(
         elif hasattr(model, "predict"):
             predict_method = model.predict
         else:
-            m = (
-                "model does not support predict_proba or predict and no "
+            raise ValueError(
+                "model does not support `predict_proba` or `predict` and no "
                 "alternate method specified."
             )
-            raise ValueError(m)
 
     input_df = False  # track if the predictor is expecting a dataframe
     if hasattr(X, "columns"):  # pandas DataFrame
@@ -98,20 +92,15 @@ def individual_conditional_expectation(
         df_types = X.dtypes
         X = X.values
         input_df = True
-
-    if not input_df and not isinstance(feature, numbers.Integral):
+    elif not isinstance(feature, numbers.Integral):
         raise ValueError(
             "Features may only be passed as a string if X is a pd.DataFrame"
         )
 
-    values = X[:, feature]
-    grid_values, grid_counts = construct_grid(grid_values, values)
-
     n = len(grid_values)
     rows, columns = X.shape
-    Xi = np.repeat(X[np.newaxis, :, :].copy(), n, axis=0)
-    grid = grid_values[:, np.newaxis]
-    Xi[:, :, feature] = grid
+    Xi = np.repeat(X[np.newaxis, :, :], n, axis=0)
+    Xi[:, :, feature] = grid_values[:, np.newaxis]
     Xi = Xi.reshape(n * rows, columns)
 
     if input_df:
@@ -119,7 +108,7 @@ def individual_conditional_expectation(
 
     pred = predict_method(Xi)
     pred = pred.reshape(n, rows)  # (n*r,) -> (n,r)
-    return grid_values, pred.T, grid_counts
+    return pred.T
 
 
 def construct_grid(
@@ -150,10 +139,10 @@ def construct_grid(
     grid_counts = None
     grid = None
 
-    if isinstance(grid_values, np.ndarray):
+    if isinstance(grid_values, Union[List, Tuple, np.ndarray]):
         # check grid_values is not an array,
         # as np.array==str raises a futurewarning
-
+        grid_values = np.asarray(grid_values)
         return grid_values, None
     else:
         if grid_values == "auto":  # here I also need to check type of column
@@ -192,10 +181,10 @@ def construct_grid(
             try:
                 grid = np.linspace(low, high, grid_values)
             except Exception:  # TODO: make more specific
-                message = (
-                    "Could not create grid: " f"linspace({low}, {high}, {grid_values})"
+                raise ValueError(
+                    "Could not create grid: "
+                    f"linspace({low}, {high}, {grid_values})"
                 )
-                raise ValueError(message)
 
     return grid, grid_counts
 
@@ -234,7 +223,7 @@ def plot_partial_dependence_with_uncertainty(
     ax=None,
     color="black",
     color_samples="grey",
-    alpha=None,
+    alpha=0.3,
     label=None,
     ci_bounds=(0.025, 0.975),
 ):
@@ -248,10 +237,12 @@ def plot_partial_dependence_with_uncertainty(
         Array of values of the feature for which the pdp values have been
         computed
     predictions list[np.array]
-        List of predictions, one from each fold. Each array is shaped
+        List of ICE predictions, one from each fold. Each array is shaped
         (num_samples, size_of_grid)
     feature_name: str
         The name of the feature
+    alpha: float
+        The alpha of the confidence region or multiple PD lines.
     mode: str
         One of -
             multiple-pd-lines - a PD line for each sample of data
@@ -259,21 +250,26 @@ def plot_partial_dependence_with_uncertainty(
                 intervals.
             interval - a PD plot with
             ice-mu-sd
+
+    Returns
+    -------
+    fig: Figure
+        A figure of the partial dependence results
+    res: dict
+        A results dictionary, with keys depending on the mode:
+            multiple-pd-lines - "mean" and individual "samples"
+            derivative - "mean" and "lower" and "upper" confidence intervals
+            interval - "mean" and "lower" and "upper" confidence intervals
+            ice-mu-sd - "mean" and the "std" of the ICE plots
     """
     fig = None
-    # do we plot the uncertainty region in grey or a transparent version of the
-    # specified color
-    if alpha is None:
-        alpha = 1
-
     if ax is not None:
         if density is not None:
             raise ValueError(
                 "Plotting dependence with density requires "
                 "subplots and cannot be added to existing axis."
             )
-
-    if ax is None:
+    else:
         if density is not None:
             fig, axes = plt.subplots(
                 2, 1, figsize=(6, 5), gridspec_kw={"height_ratios": [3, 1]}, sharex=True
@@ -289,7 +285,6 @@ def plot_partial_dependence_with_uncertainty(
                 color_samples,
             )
             ax = axes[0]
-
         else:
             fig, ax = plt.subplots(1, 1, figsize=(12, 6))
 
@@ -309,42 +304,54 @@ def plot_partial_dependence_with_uncertainty(
         ax.set_xlabel(feature_name)
 
     if mode == "multiple-pd-lines":
-        mean_pd = []
-        for i in range(len(predictions)):
-            pd = predictions[i].mean(axis=0)
-            mean_pd.append(pd)
-            ax.plot(x, pd, color=color_samples, alpha=alpha)
-        mean_pd = np.mean(mean_pd, axis=0)
+        pds = _pd_from_ice(predictions)
+        ax.plot(x, pds.T, color=color_samples, alpha=alpha)
+        mean_pd = pds.mean(axis=0)
         ax.plot(x, mean_pd, color=color, linestyle="--", label=label)
+        res = {"mean": mean_pd, "samples": pds}
 
     elif mode == "ice-mu-sd":
         p_all = np.vstack(predictions)
         mu = p_all.mean(axis=0)
         s = p_all.std(axis=0)
-        ax.fill_between(x, mu - s, mu + s, alpha=0.5)
+        ax.fill_between(x, mu - s, mu + s, alpha=alpha)
         ax.plot(x, mu)
+        res = {"mean": mu, "std": s}
 
     elif mode == "derivative" or mode == "interval":
-        pds = np.vstack([p.mean(axis=0) for p in predictions])
+        do_derivative = mode == "derivative"
+        mu, l, u = _pd_interval(predictions, x, do_derivative, ci_bounds)
         llabel = "mean"
         ylabel = "prediction"
-        if mode == "derivative":
+        if do_derivative:
             ax.set_title(f"{name} Derivative Partial Dependence: {feature_name}")
-            pds = np.gradient(pds, x, axis=1)
             llabel += " derivative"
             ylabel = "$\\Delta $" + ylabel
-
-        mu = pds.mean(axis=0)
-        l, u = mquantiles(pds, prob=ci_bounds, axis=0)
-
-        ax.fill_between(x, l, u, alpha=0.3, label=f"CI: {ci_bounds}")
+        ax.fill_between(x, l, u, alpha=alpha, label=f"CI: {ci_bounds}")
         ax.plot(x, mu, label=llabel)
         ax.set_xlabel(f"{feature_name}")
         ax.set_ylabel(ylabel)
         ax.legend()
+        res = {"mean": mu, "lower": l, "upper": u}
 
     else:
         valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative", "interval"]
         raise ValueError(f"Unknown mode {mode}. Must be one of: {valid_modes}")
 
-    return fig
+    return fig, res
+
+
+def _pd_from_ice(ice_predictions):
+    # Get the PD curves from the ICE predictions
+    pds = np.vstack([p.mean(axis=0) for p in ice_predictions])
+    return pds
+
+
+def _pd_interval(ice_predictions, x, derivative, ci_bounds):
+    # Compute (derivative) partial dependence mean and confidence intervals
+    pds = _pd_from_ice(ice_predictions)
+    if derivative:
+        pds = np.gradient(pds, x, axis=1)
+    mu = pds.mean(axis=0)
+    l, u = mquantiles(pds, prob=ci_bounds, axis=0)
+    return mu, l, u

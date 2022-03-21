@@ -228,7 +228,7 @@ class PartialDependanceEvaluator(Evaluator):
     ):
         """Construct a PartialDependanceEvaluator."""
         self.feature_grids = feature_grids
-        self.conditional_filter = conditional_filter  # callable for filtering X
+        self.conditional_filter = conditional_filter
         self.filter_name = filter_name
         self.end_transform_indx = end_transform_indx
 
@@ -251,13 +251,11 @@ class PartialDependanceEvaluator(Evaluator):
         dep_params = {}
 
         def setup_feature(feature_name, grid_values="auto"):
-            if X.loc[:, feature_name].isnull().all():  # The column contains no data
-                values = X.loc[:, feature_name].values
-                grid, density, categorical = None, None, None
-                valid = False
-
-            else:
-                values = X.loc[:, feature_name].values
+            # TODO what about numpy arrays?
+            values = X.loc[:, feature_name].values
+            grid, density, categorical = None, None, None
+            valid = False
+            if not X.loc[:, feature_name].isnull().all():  # The column contains data
                 grid, counts = dependence.construct_grid(grid_values, values)
                 categorical = True if counts is not None else False
                 density = counts if categorical else values
@@ -305,7 +303,7 @@ class PartialDependanceEvaluator(Evaluator):
             feature_indx = Xt.columns.get_loc(feature_name)
             if params.valid:
                 grid = params.grid
-                _, ice, _ = dependence.individual_conditional_expectation(
+                ice = dependence.individual_conditional_expectation(
                     predictor, Xt, feature_indx, grid
                 )
                 params.predictions.append(ice)
@@ -315,7 +313,7 @@ class PartialDependanceEvaluator(Evaluator):
         mode="multiple-pd-lines",
         color="black",
         color_samples="grey",
-        pd_alpha=None,
+        pd_alpha=0.3,
         ci_bounds=(0.025, 0.975),
     ) -> Sequence[mpl.figure.Figure]:
         """Get list of PD plots.
@@ -337,21 +335,24 @@ class PartialDependanceEvaluator(Evaluator):
 
         Returns
         -------
-        Sequence[mpl.figure.Figure]
-            List of PD plots; one for each dep param
+        dict[str, mpl.figure.Figure]
+            Dictionary of PD plots; one element for each feature grid.
+        dict[str, dict]
+            Dictionary of PD plot dictionary results, one element per feature
+            grid.
 
         Raises
         ------
         RuntimeError
             Raised if a dependency is invalid.
         """
-        figs = []
+        figs, ress = {}, {}
         for dep in self.dep_params.values():
             if dep.valid:
                 fname = dep.feature_name
                 if self.filter_name is not None:
                     fname = fname + f", filtered by: {self.filter_name}"
-                fig = dependence.plot_partial_dependence_with_uncertainty(
+                fig, res = dependence.plot_partial_dependence_with_uncertainty(
                     dep.grid,
                     dep.predictions,
                     fname,
@@ -363,12 +364,13 @@ class PartialDependanceEvaluator(Evaluator):
                     alpha=pd_alpha,
                     ci_bounds=ci_bounds,
                 )
-                figs.append(fig)
+                figs[fname] = fig
+                ress[fname] = res
             else:
                 raise RuntimeError(
                     f"Feature {dep.feature_name} is all nan," "nothing to plot."
                 )
-        return figs
+        return figs, ress
 
 
 class PermutationImportanceEvaluator(Evaluator):
