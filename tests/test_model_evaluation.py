@@ -7,7 +7,6 @@ from typing import Callable
 import hypothesis as hyp
 import hypothesis.strategies as hst
 import numpy as np
-import pandas as pd
 import pytest
 from cinspect.evaluators import Evaluator
 from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
@@ -17,7 +16,6 @@ from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
-# KFold,; GroupKFold,; LeaveOneGroupOut,; StratifiedGroupKFold,; StratifiedKFold,
 from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
 
@@ -32,10 +30,18 @@ class _MockEstimator(BaseEstimator):
 
     def fit(self, X, y):
         self.is_fitted = True
+        self.groups_called = False
         return self
 
     def predict(self, X, y=None):
         raise RuntimeError("Model evaluators should not call predict.")
+
+
+class _MockGroupEstimator(_MockEstimator):
+    def fit(self, X, y, groups=None):
+        self.is_fitted = True
+        self.groups_called = True if groups is not None else False
+        return self
 
 
 class _MockEvaluator(Evaluator):
@@ -64,14 +70,30 @@ model_evaluators = [crossval_model, bootstrap_model, bootcross_model]
 
 
 @pytest.mark.parametrize("eval_func", model_evaluators)
-def test_eval_function_calls(eval_func):
+def test_eval_function_calls(eval_func, make_simple_data):
     """Test the model evaluator functions are being called correctly."""
     estimator = _MockEstimator()
     evaluators = [_MockEvaluator()]
-    X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
+    X, y = make_simple_data
 
     evaluators = eval_func(estimator, X, y, evaluators)
     assert evaluators[0].aggregate_call  # type: ignore
+
+
+@pytest.mark.parametrize("eval_func", [bootcross_model, bootstrap_model])
+@pytest.mark.parametrize("estimator", [_MockGroupEstimator, _MockEstimator])
+@pytest.mark.parametrize("flag", [True, False])
+def test_groups_input(eval_func, estimator, flag, make_simple_data):
+    """Test that groups are input to the estimator as expected."""
+    estimator = _MockEstimator()
+    evaluators = [_MockEvaluator()]
+    X, y = make_simple_data
+
+    evaluators = eval_func(estimator, X, y, evaluators, use_group_cv=flag)
+    if isinstance(estimator, _MockGroupEstimator) and flag:
+        assert estimator.groups_called
+    else:
+        assert not estimator.groups_called
 
 
 class _MockRandomEvaluator(Evaluator):
@@ -108,11 +130,10 @@ random_seeds = [42, np.random.RandomState()]
 
 @pytest.mark.parametrize("random_state", random_seeds)
 @pytest.mark.parametrize("eval_func", model_evaluators)
-def test_reproducible_function_calls(eval_func, random_state):
+def test_reproducible_function_calls(eval_func, random_state, make_simple_data):
     """Test that model evaluator functions produce same output given same input."""
     estimator = _MockEstimator()
-
-    X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
+    X, y = make_simple_data
 
     def sample_from_rng_with_distribution(rng):
         return rng.normal()
@@ -158,7 +179,7 @@ class _MockLinearEstimator(BaseEstimator):
 
 
 def test_bootstrap_samples_from_eval_distribution(
-    n_bootstraps=10, n_repeats=10, seed=None
+    make_simple_data, n_bootstraps=10, n_repeats=10, seed=None
 ):
     """Test that true mean is in 95%CI of bootstrap samples.
 
@@ -178,14 +199,18 @@ def test_bootstrap_samples_from_eval_distribution(
     logger.info(f"seeds {seeds}")
 
     within_bound_list = [
-        _test_bootstrap_samples_from_eval_distribution(n_bootstraps, random_state)
+        _test_bootstrap_samples_from_eval_distribution(
+            n_bootstraps, random_state, make_simple_data
+        )
         for random_state in seeds
     ]
 
     assert np.any(within_bound_list)
 
 
-def _test_bootstrap_samples_from_eval_distribution(n_bootstraps, random_state):
+def _test_bootstrap_samples_from_eval_distribution(
+        n_bootstraps, random_state, make_simple_data
+):
     """Test that true mean is in 95%CI of bootstrap samples.
 
     This is a sanity test of bootstrapping from an Evaluator
@@ -198,8 +223,8 @@ def _test_bootstrap_samples_from_eval_distribution(n_bootstraps, random_state):
     in which case change the seed?)
     """
     estimator = _MockEstimator()
+    X, y = make_simple_data
 
-    X, y = pd.DataFrame(np.ones((100, 2))), pd.Series(np.ones(100))
     # TODO: parametrise over eval_distribution
     mean = 0
     stdev = 1
@@ -244,10 +269,8 @@ def test_bootcross_split(random_state, test_size):
     assert len(tsi) == test_size
 
     # Make sure training and testing are not overlapping
-    train_set = set(tri)
-    test_set = set(tsi)
-    for x in train_set:
-        assert x not in test_set
+    assert len(set(tri).intersection(set(tsi))) == 0
+
 
 
 # ---------- Fuzz-test bootstrap_model -------------
@@ -284,10 +307,10 @@ random_state_strategy = hst.one_of(
         min_value=1, max_value=10
     ),  # TODO: max_value should be increased when parallelising
     random_state=random_state_strategy,
-    groups=hst.booleans(),
+    use_group_cv=hst.booleans(),
 )
 def test_fuzz_bootstrap_model(
-    estimator, X, y, evaluators, replications, random_state, groups
+    estimator, X, y, evaluators, replications, random_state, use_group_cv
 ):
     """Simple fuzz-testing to ensure that we can run bootstrap_model without exceptions."""
     try:
@@ -298,7 +321,7 @@ def test_fuzz_bootstrap_model(
             evaluators=evaluators,
             replications=replications,
             random_state=random_state,
-            groups=groups,
+            use_group_cv=use_group_cv,
         )
     except ValueError as ve:
         # Discard value errors;
@@ -334,10 +357,10 @@ test_size_strategy = hst.one_of(
     ),  # TODO: max_value should be increased when parallelising
     test_size=test_size_strategy,
     random_state=random_state_strategy,
-    groups=hst.booleans(),
+    use_group_cv=hst.booleans(),
 )
 def test_fuzz_bootcross_model(
-    estimator, X, y, evaluators, replications, test_size, random_state, groups
+    estimator, X, y, evaluators, replications, test_size, random_state, use_group_cv
 ):
     """Simple fuzz-testing to ensure that we can run bootcross_model without exceptions."""
     try:
@@ -349,7 +372,7 @@ def test_fuzz_bootcross_model(
             replications=replications,
             test_size=test_size,
             random_state=random_state,
-            groups=groups,
+            use_group_cv=use_group_cv,
         )
     except ValueError as ve:
         # Discard value errors;

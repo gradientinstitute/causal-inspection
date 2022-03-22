@@ -15,6 +15,7 @@ from sklearn.model_selection import KFold
 from sklearn.utils import resample, check_random_state
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection._search import BaseSearchCV
 
 from cinspect.evaluators import Evaluator
 
@@ -75,7 +76,7 @@ def bootstrap_model(
     evaluators: Sequence[Evaluator],
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    groups: bool = False,
+    use_group_cv: bool = False
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -87,7 +88,7 @@ def bootstrap_model(
 
     Parameters
     ----------
-    groups: bool
+    use_group_cv: bool
         This inputs the indices of the re-sampled datasets into the estimator
         as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
         This can only be used with e.g. `GridSearchCV` where `cv` is
@@ -97,7 +98,7 @@ def bootstrap_model(
     # Run various checks and prepare the evaluators
     indices = np.arange(len(X))
     random_state = check_random_state(random_state)
-    groups = _check_group_estimator(estimator, groups)
+    groups = _check_group_estimator(estimator, use_group_cv)
     for ev in evaluators:
         ev.prepare(estimator, X, y, random_state=random_state)
 
@@ -132,7 +133,7 @@ def bootcross_model(
     replications: int = 100,
     test_size: Union[int, float] = 0.25,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    groups: bool = False,
+    use_group_cv: bool = False
 ) -> Sequence[Evaluator]:
     """
     Use bootstrapping to compute random train/test folds (no sample sharing).
@@ -142,7 +143,7 @@ def bootcross_model(
 
     Parameters
     ----------
-    groups: bool
+    use_group_cv: bool
         This inputs the indices of the re-sampled datasets into the estimator
         as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
         This can only be used with e.g. `GridSearchCV` where `cv` is
@@ -160,7 +161,7 @@ def bootcross_model(
 
     # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
-    groups = _check_group_estimator(estimator, groups)
+    groups = _check_group_estimator(estimator, use_group_cv)
     for ev in evaluators:
         ev.prepare(estimator, X, y, random_state=random_state)
 
@@ -189,17 +190,24 @@ def bootcross_model(
     return evaluators
 
 
-def _check_group_estimator(estimator, groups):
-    if groups:
+def _check_group_estimator(estimator, use_group_cv):
+    if use_group_cv:
         # Check if estimator supports group keyword
-        spec = inspect.getfullargspec(estimator.fit)
-        if ("groups" not in spec.args) and (spec.varkw is None):
+        spec = inspect.signature(estimator.fit)
+        if "groups" not in spec.parameters:
             LOG.warning(
                 "`groups` parameter passed to bootstrap_model, but "
                 "estimator doesn't support groups. Fitting without groups."
             )
-            groups = False
-    return groups
+            return False
+    elif isinstance(estimator, BaseSearchCV):
+        LOG.warning(
+            "Using a parameter search estimator without a 'Group' validation"
+            " method. Please consider using a 'Group' validation method such"
+            " as GroupKFold, otherwise there may be samples common to the"
+            " training and testing set."
+        )
+    return use_group_cv
 
 
 def _bootcross_split(data_size, test_size, random_state):

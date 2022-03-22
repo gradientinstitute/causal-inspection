@@ -6,6 +6,7 @@ from typing import NamedTuple, Union
 
 import numpy as np
 import pandas as pd
+
 from multimethod import multimethod
 from scipy import linalg, stats
 from sklearn.base import BaseEstimator, RegressorMixin, clone
@@ -134,7 +135,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
 
-    def fit(self, X, y, **fitargs):
+    def fit(self, X, y, groups=None):
         """Fit the estimator.
 
         Parameters
@@ -143,9 +144,11 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
             TODO
         y: ndarray or DataFrame
             TODO
-        **fitargs:
-            TODO: All values must be of shape (n_samples,), these will be split
-            into control and treatment cohorts like X and y.
+        groups: ndarray, optional
+            Group labels for the samples used while splitting the dataset into
+            train/test set. Only used in conjunction with a parameter search
+            estimator (e.g. GridSearchCV) and a 'Group' cv instance (e.g.,
+            GroupKFold)
         """
         self.n_features_in_ = X.shape[1]  # required to be sklearn compatible
         self.t_estimator_ = clone(self.estimator)
@@ -155,12 +158,14 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
 
         c_mask = ~t_mask
         yt, yc = y[t_mask], y[c_mask]
-        fargst = {k: v[t_mask] for k, v in fitargs.items()}
-        fargsc = {k: v[c_mask] for k, v in fitargs.items()}
 
-        self.t_estimator_.fit(Xt, yt, **fargst)
-        self.c_estimator_.fit(Xc, yc, **fargsc)
+        if groups is not None:
+            self.t_estimator_.fit(Xt, yt, groups[t_mask])
+            self.c_estimator_.fit(Xc, yc, groups[c_mask])
+            return self
 
+        self.t_estimator_.fit(Xt, yt)
+        self.c_estimator_.fit(Xc, yc)
         return self
 
     def predict(self, X):
