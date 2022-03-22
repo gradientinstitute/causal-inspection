@@ -4,7 +4,7 @@
 
 import logging
 from collections import defaultdict
-from typing import Any, NamedTuple, Sequence, Union
+from typing import Any, Sequence, Union
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
