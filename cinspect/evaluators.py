@@ -350,12 +350,14 @@ class _Dependance():
         # TODO what about numpy arrays?
         values = X.loc[:, feature_name].values
         grid, density, categorical = None, None, None
-        valid = False
-        if not X.loc[:, feature_name].isnull().all():  # column contains data
+        valid = not X.loc[:, feature_name].isnull().all()  # does column contain data?
+        if valid:
             grid, counts = dependence.construct_grid(grid_values, values)
             categorical = True if counts is not None else False
             density = counts if categorical else values
             valid = True
+        else:
+            LOG.warning(f"Column {feature_name} contains no data.")
 
         self.valid = valid
         self.feature_name = feature_name
