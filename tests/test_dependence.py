@@ -1,14 +1,13 @@
 """Test the partial dependence module."""
 
-import pytest
 # import pandas as pd
 import numpy as np
-
-from scipy.stats import norm
-from sklearn.utils import resample, check_random_state
+import pytest
+from cinspect.dependence import (_pd_interval,
+                                 individual_conditional_expectation)
 from cinspect.estimators import LinearRegressionStat
-from cinspect.dependence import (individual_conditional_expectation,
-                                 _pd_interval, construct_grid)
+from scipy.stats import norm
+from sklearn.utils import check_random_state, resample
 
 
 def test_ice(linear_causal_data):

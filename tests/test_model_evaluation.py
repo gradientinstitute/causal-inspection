@@ -9,14 +9,13 @@ import hypothesis.strategies as hst
 import numpy as np
 import pytest
 from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import (bootstrap_model, crossval_model,
-                                       bootcross_model, _bootcross_split)
+from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
+                                       bootstrap_model, crossval_model)
 from hypothesis import given
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyRegressor
 from sklearn.linear_model import LinearRegression
-
 from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
 
@@ -273,9 +272,7 @@ def test_bootcross_split(random_state, test_size):
     assert len(set(tri).intersection(set(tsi))) == 0
 
 
-
 # ---------- Fuzz-test bootstrap_model -------------
-
 
 # * Helpers *
 estimator_strategy = hst.one_of(
