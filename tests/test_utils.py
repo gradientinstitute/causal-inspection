@@ -1,9 +1,11 @@
 """Testing utilities."""
 
+import functools
 from typing import Callable, Iterable, Optional, Sequence, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt
+from decorator import decorator
 from scipy.stats.mstats import mquantiles
 from sklearn.utils import check_random_state
 
@@ -77,8 +79,60 @@ def confidence_intervals(
     values: Iterable[float], quantiles: Sequence[float] = (0.005, 0.995)
 ) -> np.ma.MaskedArray:
     """Return quantiles of given values.
-    
+
     Wraps mquantiles for use with general iterables"""
     # breakpoint()
     cis: np.ma.MaskedArray = mquantiles(list(values), quantiles)
     return cis
+
+
+# def duplicate_flaky_test(test, p_expected_failure, confidence):
+# TODO; construct more principled way to manage flaky tests
+# (e.g. given expected probability of failure p,
+# repeat until confident that true prob > p)
+# https://en.wikipedia.org/wiki/Sequential_probability_ratio_test
+# https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval
+
+
+# TODO; construct more principled way to manage flaky tests
+# (e.g. given expected probability of failure p,
+# repeat until confident that true prob > p)
+@decorator
+def duplicate_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
+    """
+    Run the given test `n_repeats` times, raising the `n_allowed_failures+1`th assertion error
+
+    Parameters
+    ----------
+    test : Callable[Any, V]
+        test to wrap
+    n_repeats : int, optional
+        number of times to repeat the test, by default 2
+    n_allowed_failures : int, optional
+        number of allowed failures, by default 0
+    args, kwargs
+        passed on to test function
+
+    Returns
+    -------
+    values : List[V]
+        values returned by successful calls to test
+
+    Raises
+    -------
+    AssertionError
+        The (n_allowed_failures+1)th AssertionError thrown
+    """
+    n_failures = 0
+    values = []
+    for _ in range(n_repeats):
+
+        try:
+            values.append(test(*args, **kwargs))
+        except AssertionError as e:
+            n_failures += 1
+            if n_failures > n_allowed_failures:
+                e.args += f"More than {n_allowed_failures}"
+                raise e
+
+    return values

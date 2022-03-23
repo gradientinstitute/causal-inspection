@@ -1,6 +1,7 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Test for the evaluators module."""
+
 import numpy as np
 import pytest
 from cinspect import estimators
@@ -15,6 +16,10 @@ def test_evaluator_calls():
     pass
 
 
+@test_utils.duplicate_test(
+    # reduce probability of false positives (hacky; see test_utils)
+    n_repeats=100, n_allowed_failures=1
+)
 @pytest.mark.parametrize("alpha", [-0.5, 0.1, 0, 0.3, 0.9])
 # support_size of 0 means that treatment is the only parameter with an effect on the outcome
 @pytest.mark.parametrize("n_x, support_size", [(1, 0)])
