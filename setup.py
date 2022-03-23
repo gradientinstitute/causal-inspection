@@ -68,6 +68,7 @@ setup(
             "pytest-mock",
             "flake8-bugbear",
             "flake8-builtins",
+            "decorator",
             "pytest-cov",
             "flake8-comprehensions",
             "flake8-docstrings",
