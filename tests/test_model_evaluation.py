@@ -19,6 +19,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
 
+import test_utils
 import testing_strategies
 
 logger = logging.getLogger()
@@ -124,7 +125,6 @@ class _MockRandomEvaluator(Evaluator):
         """Return (random) evaluation."""
         return self._results
 
-
 random_seeds = [42, np.random.RandomState()]
 
 
@@ -177,39 +177,12 @@ class _MockLinearEstimator(BaseEstimator):
         y_pred = self._coefs @ X
         return y_pred
 
-
+@test_utils.duplicate_flaky_test(
+    # replicate to reduce chance of false positive
+    n_repeats=10, n_allowed_failures=1
+    )
 def test_bootstrap_samples_from_eval_distribution(
-    make_simple_data, n_bootstraps=10, n_repeats=10, seed=None
-):
-    """Test that true mean is in 95%CI of bootstrap samples.
-
-    If there is a very probability that it's not, this test fails.
-
-    This test simply repeats _test_bootstrap_samples_from_eval_distribution n_repeats times,
-    with n_bootstraps bootstraps each time,
-    and fails if it fails 100% of the time; chance of false failure is ~0.05**(n_repeats).
-
-    The default of 10 repeats puts us at a 1:1e14 chance of false failure.
-
-    This is obviously at the expense of allowing more false passes.
-    """
-    # generate a sequence of random seeds
-    rng = check_random_state(seed)
-    seeds = rng.randint(0, 10000, size=n_repeats)
-    logger.info(f"seeds {seeds}")
-
-    within_bound_list = [
-        _test_bootstrap_samples_from_eval_distribution(
-            n_bootstraps, random_state, make_simple_data
-        )
-        for random_state in seeds
-    ]
-
-    assert np.any(within_bound_list)
-
-
-def _test_bootstrap_samples_from_eval_distribution(
-        n_bootstraps, random_state, make_simple_data
+        make_simple_data, n_bootstraps=10, random_state=42
 ):
     """Test that true mean is in 95%CI of bootstrap samples.
 
@@ -222,6 +195,7 @@ def _test_bootstrap_samples_from_eval_distribution(
     in which case there's a 5% chance of a false negative,
     in which case change the seed?)
     """
+    random_state = check_random_state(random_state)
     estimator = _MockEstimator()
     X, y = make_simple_data
 

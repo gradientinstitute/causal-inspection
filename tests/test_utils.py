@@ -86,7 +86,7 @@ def confidence_intervals(
     return cis
 
 
-# def duplicate_flaky_test(test, p_expected_failure, confidence):
+# def duplicate_flaky_test_with_probability_of_failure(test, p_expected_failure, confidence):
 # TODO; construct more principled way to manage flaky tests
 # (e.g. given expected probability of failure p,
 # repeat until confident that true prob > p)
@@ -94,13 +94,12 @@ def confidence_intervals(
 # https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval
 
 
-# TODO; construct more principled way to manage flaky tests
-# (e.g. given expected probability of failure p,
-# repeat until confident that true prob > p)
+# use decorator.decorator over functools.wraps for pytest compatability
+# See e.g. https://stackoverflow.com/a/19614807
 @decorator
-def duplicate_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
+def duplicate_flaky_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
     """
-    Run the given test `n_repeats` times, raising the `n_allowed_failures+1`th assertion error
+    Run the given test `n_repeats` times, raising the `n_allowed_failures+1`^th assertion error
 
     Parameters
     ----------
@@ -132,7 +131,7 @@ def duplicate_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
         except AssertionError as e:
             n_failures += 1
             if n_failures > n_allowed_failures:
-                e.args += f"More than {n_allowed_failures}"
+                e.args += (f"More than {n_allowed_failures} failures",)
                 raise e
 
     return values
