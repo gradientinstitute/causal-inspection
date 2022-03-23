@@ -110,6 +110,7 @@ def main():
 
     pdeval.get_results(mode="interval")
     pdeval.get_results(mode="derivative")
+    pdeval.get_results(mode="multiple-pd-lines")
     pieval.get_results(ntop=5)
 
     plt.show()

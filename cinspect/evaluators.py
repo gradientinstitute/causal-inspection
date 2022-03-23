@@ -4,7 +4,7 @@
 
 import logging
 from collections import defaultdict
-from typing import Any, NamedTuple, Sequence, Union
+from typing import Any, Sequence, Union
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -193,17 +193,6 @@ class BinaryTreatmentEffect(Evaluator):
         return mean_ate, *ci_levels
 
 
-class Dependance(NamedTuple):
-    """Simple tuple class to hold dependance parameters for PD evaluator."""
-
-    valid: bool
-    feature_name: str
-    grid: Union[str, int, Sequence]
-    density: np.ndarray
-    categorical: bool
-    predictions: Sequence[np.ndarray]
-
-
 class PartialDependanceEvaluator(Evaluator):
     """Partial dependence plot evaluator.
 
@@ -235,7 +224,7 @@ class PartialDependanceEvaluator(Evaluator):
     ):
         """Construct a PartialDependanceEvaluator."""
         self.feature_grids = feature_grids
-        self.conditional_filter = conditional_filter  # callable for filtering X
+        self.conditional_filter = conditional_filter
         self.filter_name = filter_name
         self.end_transform_indx = end_transform_indx
 
@@ -256,35 +245,14 @@ class PartialDependanceEvaluator(Evaluator):
             X = self.conditional_filter(X)
 
         dep_params = {}
-
-        def setup_feature(feature_name, grid_values="auto"):
-            if X.loc[:, feature_name].isnull().all():  # The column contains no data
-                values = X.loc[:, feature_name].values
-                grid, density, categorical = None, None, None
-                valid = False
-
-            else:
-                values = X.loc[:, feature_name].values
-                grid, counts = dependence.construct_grid(grid_values, values)
-                categorical = True if counts is not None else False
-                density = counts if categorical else values
-                valid = True
-
-            dep_params[feature_name] = Dependance(
-                valid=valid,
-                feature_name=feature_name,
-                grid=grid,
-                density=density,
-                categorical=categorical,
-                predictions=[],
-            )
-
         if self.feature_grids is not None:
             for feature_name, grid_values in self.feature_grids.items():
-                setup_feature(feature_name, grid_values)
+                dep_params[feature_name] = _Dependance(
+                    X, feature_name, grid_values
+                )
         else:
             for feature_name in X.columns:
-                setup_feature(feature_name)
+                dep_params[feature_name] = _Dependance(X, feature_name)
 
         self.dep_params = dep_params
 
@@ -312,7 +280,7 @@ class PartialDependanceEvaluator(Evaluator):
             feature_indx = Xt.columns.get_loc(feature_name)
             if params.valid:
                 grid = params.grid
-                _, ice, _ = dependence.individual_conditional_expectation(
+                ice = dependence.individual_conditional_expectation(
                     predictor, Xt, feature_indx, grid
                 )
                 params.predictions.append(ice)
@@ -322,7 +290,7 @@ class PartialDependanceEvaluator(Evaluator):
         mode="multiple-pd-lines",
         color="black",
         color_samples="grey",
-        pd_alpha=None,
+        pd_alpha=0.3,
         ci_bounds=(0.025, 0.975),
     ) -> Sequence[mpl.figure.Figure]:
         """Get list of PD plots.
@@ -344,21 +312,24 @@ class PartialDependanceEvaluator(Evaluator):
 
         Returns
         -------
-        Sequence[mpl.figure.Figure]
-            List of PD plots; one for each dep param
+        dict[str, mpl.figure.Figure]
+            Dictionary of PD plots; one element for each feature grid.
+        dict[str, dict]
+            Dictionary of PD plot dictionary results, one element per feature
+            grid.
 
         Raises
         ------
         RuntimeError
             Raised if a dependency is invalid.
         """
-        figs = []
+        figs, ress = {}, {}
         for dep in self.dep_params.values():
             if dep.valid:
                 fname = dep.feature_name
                 if self.filter_name is not None:
                     fname = fname + f", filtered by: {self.filter_name}"
-                fig = dependence.plot_partial_dependence_with_uncertainty(
+                fig, res = dependence.plot_partial_dependence_with_uncertainty(
                     dep.grid,
                     dep.predictions,
                     fname,
@@ -370,12 +341,37 @@ class PartialDependanceEvaluator(Evaluator):
                     alpha=pd_alpha,
                     ci_bounds=ci_bounds,
                 )
-                figs.append(fig)
+                figs[fname] = fig
+                ress[fname] = res
             else:
                 raise RuntimeError(
-                    f"Feature {dep.feature_name} is all nan," "nothing to plot."
+                    f"Feature {dep.feature_name} is all nan, nothing to plot."
                 )
-        return figs
+        return figs, ress
+
+
+class _Dependance():
+    """Simple tuple class to hold dependence parameters for PD evaluator."""
+
+    def __init__(self, X, feature_name, grid_values="auto"):
+        # TODO what about numpy arrays?
+        values = X.loc[:, feature_name].values
+        grid, density, categorical = None, None, None
+        valid = not X.loc[:, feature_name].isnull().all()  # does column contain data?
+        if valid:
+            grid, counts = dependence.construct_grid(grid_values, values)
+            categorical = True if counts is not None else False
+            density = counts if categorical else values
+            valid = True
+        else:
+            LOG.warning(f"Column {feature_name} contains no data.")
+
+        self.valid = valid
+        self.feature_name = feature_name
+        self.grid = grid
+        self.density = density
+        self.categorical = categorical
+        self.predictions = []
 
 
 class PermutationImportanceEvaluator(Evaluator):
@@ -413,21 +409,19 @@ class PermutationImportanceEvaluator(Evaluator):
         scorer=None,
     ):
         """Construct a permutation importance evaluator."""
-        if not grouped and hasattr(
-            features, "values"
-        ):  # flatten the dict if not grouped
+        if not grouped and hasattr(features, "values"):  # flatten the dict
             result = []
             for vals in features.values():
                 result.extend(vals)
             features = result
 
-        if grouped and not hasattr(features, "values"):
+        elif grouped and not hasattr(features, "values"):
             raise ValueError(
-                "If features should be grouped they must be "
-                "specified as a dictionary."
+                "If features should be grouped they must be specified as a "
+                "dictionary."
             )
 
-        if grouped and hasattr(features, "values"):  # grouped and passed dict
+        elif grouped and hasattr(features, "values"):  # grouped and passed dict
             features = {key: value for key, value in features.items() if len(value) > 0}
 
         self.n_repeats = n_repeats
@@ -611,7 +605,7 @@ def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
     return fig
 
 
-# TODO: these are prime candidates for multiple dispatch
+# TODO: these are prime candidates for single dispatch
 
 
 def _check_feature_indices(
