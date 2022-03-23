@@ -16,7 +16,7 @@ def test_evaluator_calls():
     pass
 
 
-@test_utils.duplicate_flaky_test(
+@test_utils.repeat_flaky_test(
     # reduce probability of false positives (hacky; see test_utils)
     n_repeats=100, n_allowed_failures=1
 )

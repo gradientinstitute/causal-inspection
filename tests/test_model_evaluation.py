@@ -125,6 +125,7 @@ class _MockRandomEvaluator(Evaluator):
         """Return (random) evaluation."""
         return self._results
 
+
 random_seeds = [42, np.random.RandomState()]
 
 
@@ -177,7 +178,8 @@ class _MockLinearEstimator(BaseEstimator):
         y_pred = self._coefs @ X
         return y_pred
 
-@test_utils.duplicate_flaky_test(
+
+@test_utils.repeat_flaky_test(
     # replicate to reduce chance of false positive
     n_repeats=10, n_allowed_failures=1
     )
@@ -245,12 +247,11 @@ def test_bootcross_split(random_state, test_size):
     # Make sure training and testing are not overlapping
     assert len(set(tri).intersection(set(tsi))) == 0
 
-
-
 # ---------- Fuzz-test bootstrap_model -------------
 
-
 # * Helpers *
+
+
 estimator_strategy = hst.one_of(
     hst.builds(DummyRegressor), hst.builds(LinearRegression)
 )

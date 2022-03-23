@@ -1,6 +1,5 @@
 """Testing utilities."""
 
-import functools
 from typing import Callable, Iterable, Optional, Sequence, TypeVar, Union
 
 import numpy as np
@@ -17,7 +16,7 @@ def draw_bootstrap_samples(
     random_seed: Optional[Union[int, np.random.RandomState]] = None,
 ) -> Iterable[np.ndarray]:
     """
-    Draw random samples from given values with replacement
+    Draw random samples from given values with replacement.
 
     Parameters
     ----------
@@ -70,7 +69,6 @@ def bootstrap(
     Iterable[Y]
         ( f(X[ixs]) for ixs in indices )
     """
-
     vs = (f(X[ixs]) for ixs in indices)
     return vs
 
@@ -80,7 +78,8 @@ def confidence_intervals(
 ) -> np.ma.MaskedArray:
     """Return quantiles of given values.
 
-    Wraps mquantiles for use with general iterables"""
+    Wraps mquantiles for use with general iterables
+    """
     # breakpoint()
     cis: np.ma.MaskedArray = mquantiles(list(values), quantiles)
     return cis
@@ -97,9 +96,9 @@ def confidence_intervals(
 # use decorator.decorator over functools.wraps for pytest compatability
 # See e.g. https://stackoverflow.com/a/19614807
 @decorator
-def duplicate_flaky_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
+def repeat_flaky_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
     """
-    Run the given test `n_repeats` times, raising the `n_allowed_failures+1`^th assertion error
+    Run the given test `n_repeats` times, raising the `n_allowed_failures+1`^th assertion error.
 
     Parameters
     ----------
