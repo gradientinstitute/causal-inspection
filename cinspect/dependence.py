@@ -3,7 +3,7 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
-from typing import Optional, Tuple, Union, List
+from typing import List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -182,8 +182,7 @@ def construct_grid(
                 grid = np.linspace(low, high, grid_values)
             except Exception:  # TODO: make more specific
                 raise ValueError(
-                    "Could not create grid: "
-                    f"linspace({low}, {high}, {grid_values})"
+                    "Could not create grid: " f"linspace({low}, {high}, {grid_values})"
                 )
 
     return grid, grid_counts
@@ -342,13 +341,13 @@ def plot_partial_dependence_with_uncertainty(
 
 
 def _pd_from_ice(ice_predictions):
-    # Get the PD curves from the ICE predictions
+    """Get the PD curves from the ICE predictions."""
     pds = np.vstack([p.mean(axis=0) for p in ice_predictions])
     return pds
 
 
 def _pd_interval(ice_predictions, x, derivative, ci_bounds):
-    # Compute (derivative) partial dependence mean and confidence intervals
+    """Compute (derivative) partial dependence mean and confidence intervals."""
     pds = _pd_from_ice(ice_predictions)
     if derivative:
         pds = np.gradient(pds, x, axis=1)

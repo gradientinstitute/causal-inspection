@@ -1,18 +1,19 @@
 """Testing utilities."""
 
+import itertools
 from typing import Callable, Iterable, Optional, Sequence, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt
 from decorator import decorator
 from scipy.stats.mstats import mquantiles
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, resample
 
 
 def draw_bootstrap_samples(
     values: npt.ArrayLike,
     sample_size: npt._ShapeLike,
-    n_repeats: int,
+    n_repeats: Optional[int] = None,
     random_seed: Optional[Union[int, np.random.RandomState]] = None,
 ) -> Iterable[np.ndarray]:
     """
@@ -24,23 +25,28 @@ def draw_bootstrap_samples(
         Values to bootstrap from
     sample_size : npt._ShapeLike
         Size/shape of bootstrap batches
-    n_repeats : int
-        number of bootstrap batches to generate
+    n_repeats : Optional[int]
+        number of bootstrap batches to generate. If None, generate indefinitely. By default None
     random_seed : Optional[Union[int, np.random.RandomState]], optional
         random seed, by default None
 
-    Returns
+    Yields
     -------
-    Iterable[np.ndarray]
-        Iterable of bootstrap batches
+    batch: np.ndarray
+        Bootstrap batches
     """
-    rng = check_random_state(random_seed)
-    # rng = np.random.default_rng(rng)
+    seed = check_random_state(random_seed)
 
-    samples = (
-        rng.choice(values, size=sample_size, replace=True) for _ in range(n_repeats)
-    )
-    return samples
+    if n_repeats is None:
+        while True:
+            yield resample(
+                values, replace=True, n_samples=sample_size, random_state=seed
+            )
+    else:
+        for _ in range(n_repeats):
+            yield resample(
+                values, replace=True, n_samples=sample_size, random_state=seed
+            )
 
 
 # domain, codomain
@@ -50,7 +56,7 @@ Y = TypeVar("Y")
 
 def bootstrap(
     f: Callable[[Sequence[X]], Y],
-    X: Sequence[X],
+    Xs: Sequence[X],
     indices: Iterable[slice],
 ) -> Iterable[Y]:
     """
@@ -60,17 +66,18 @@ def bootstrap(
     ----------
     f : Callable[[Sequence[X]], Y]
         unction to call on each subset of data
-    X : Sequence[X]
+    Xs : Sequence[X]
         Data to draw from
     indices : Iterable[slice]
         Sequence of subset indices; one set of indices for each bootstrap repeat
-    Returns
+
+    Yields
     -------
-    Iterable[Y]
-        ( f(X[ixs]) for ixs in indices )
+    Y
+        `f(Xs[ixs])` for the current `ixs` in `indices`
     """
-    vs = (f(X[ixs]) for ixs in indices)
-    return vs
+    for ixs in indices:
+        yield f(Xs[ixs])
 
 
 def confidence_intervals(
@@ -80,7 +87,6 @@ def confidence_intervals(
 
     Wraps mquantiles for use with general iterables
     """
-    # breakpoint()
     cis: np.ma.MaskedArray = mquantiles(list(values), quantiles)
     return cis
 
