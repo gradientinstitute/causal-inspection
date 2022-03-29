@@ -18,7 +18,8 @@ def test_evaluator_calls():
 
 @test_utils.repeat_flaky_test(
     # reduce probability of false positives (hacky; see test_utils)
-    n_repeats=100, n_allowed_failures=1
+    n_repeats=100,
+    n_allowed_failures=1,
 )
 @pytest.mark.parametrize("alpha", [-0.5, 0.1, 0, 0.3, 0.9])
 # support_size of 0 means that treatment is the only parameter with an effect on the outcome
@@ -60,46 +61,27 @@ def test_linear_binary_ate(
         len(training_data["T"].shape) == 1
     ), "This test assumes that treatment is 1D, but treatment shape is {training_data['T'].shape}"
 
-    train_XTY = np.hstack(
-        (
-            training_data["X"],
-            training_data["T"][:, np.newaxis],
-            training_data["Y"][:, np.newaxis],
-        )
-    )
-    test_XTY = np.hstack(
-        (
-            testing_data["X"],
-            testing_data["T"][:, np.newaxis],
-            testing_data["Y"][:, np.newaxis],
-        )
-    )
-
-    X_cols = np.arange(0, testing_data["X"].shape[1])
-    # XTY arrays are packed so that T/Y are second-/last columns
-    T_col = -2
-    Y_col = -1
-
     def binary_ate(
-        training_data, testing_data=test_XTY, X_cols=X_cols, T_col=T_col, Y_col=Y_col
+        X_train,
+        T_train,
+        Y_train,
+        X_test=testing_data["X"],
+        T_test=testing_data["T"],
+        Y_test=testing_data["Y"],
     ):
         """Calculate binary ATE once using environment's estimator; used in bootstrap."""
-        train_XT = np.hstack(
-            (training_data[:, X_cols], training_data[:, T_col].reshape(-1, 1))
-        )
-        test_XT = np.hstack(
-            (testing_data[:, X_cols], testing_data[:, T_col].reshape(-1, 1))
-        )
-        estimator.fit(X=train_XT, y=training_data[:, Y_col])
+        XT_train = np.hstack((X_train, T_train.reshape(-1, 1)))
+        XT_test = np.hstack((X_test, T_test.reshape(-1, 1)))
+        estimator.fit(X=XT_train, y=Y_train)
 
         ate_est = BinaryTreatmentEffect(
-            treatment_column=train_XT.shape[1] - 1,
+            treatment_column=XT_train.shape[1] - 1,
             treatment_val=treatment_value,
             control_val=control_value,
         )
 
-        ate_est.prepare(estimator, X=train_XT, y=training_data[:, Y_col])
-        ate_est.evaluate(estimator, X=test_XT, y=testing_data[:, Y_col])
+        ate_est.prepare(estimator, X=XT_train, y=Y_train)
+        ate_est.evaluate(estimator, X=XT_test, y=Y_test)
         ate = ate_est.ate_samples[0]
         return ate
 
@@ -107,12 +89,24 @@ def test_linear_binary_ate(
         np.arange(n_test_samples),
         sample_size=n_bootstrap_samples,
         n_repeats=n_bootstrap_repeats,
+        random_seed=random_state,
     )
-    ate_bootstraps = test_utils.bootstrap(
-        binary_ate, train_XTY, indices=bootstrap_indices
+
+    ate_bootstrapped = test_utils.bootstrap(
+        binary_ate,
+        bootstrap_indices,
+        X_train=training_data["X"],
+        Y_train=training_data["Y"],
+        T_train=training_data["T"],
+        X_test=testing_data["X"],
+        Y_test=testing_data["Y"],
+        T_test=testing_data["T"],
     )
+    # print(list(ate_bootstrapped))
+
+    # breakpoint()
     ate_cis = test_utils.confidence_intervals(
-        ate_bootstraps, quantiles=(0.0005, 0.9995)
+        ate_bootstrapped, quantiles=(0.0005, 0.9995)
     )
     # breakpoint()
     assert (

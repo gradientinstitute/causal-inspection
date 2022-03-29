@@ -3,11 +3,12 @@
 # import pandas as pd
 import numpy as np
 import pytest
-from cinspect.dependence import (_pd_interval,
-                                 individual_conditional_expectation)
+from cinspect.dependence import _pd_interval, individual_conditional_expectation
 from cinspect.estimators import LinearRegressionStat
 from scipy.stats import norm
-from sklearn.utils import check_random_state, resample
+from sklearn.utils import check_random_state
+
+import test_utils
 
 
 def test_ice(linear_causal_data):
@@ -51,17 +52,26 @@ def test_conf_interval(linear_causal_data, ci):
 
     # bootstrap ICE samples
     replications = 500
-    ice_samples = []
-    for _ in range(replications):
-        Xb, yb = resample(X, y, random_state=rs)
+
+    def ice_fn(Xb, yb):
         reg.fit(Xb, yb)
-        ice_samples.append(
-            individual_conditional_expectation(reg, Xb, 0, grid)
-        )
+        ice = individual_conditional_expectation(reg, Xb, 0, grid)
+        return ice
+
+    ice_samples_gen = test_utils.bootstrap(
+        ice_fn,
+        test_utils.draw_bootstrap_samples(
+            np.arange(X.shape[0]), n_repeats=replications, random_seed=rs
+        ),
+        X,
+        y,
+    )
+    ice_samples = list(ice_samples_gen)
+    # breakpoint()
 
     # Compute the derivative PD
     alpha_bt, bt_l, bt_u = _pd_interval(ice_samples, grid, True, (ci_l, ci_u))
 
     lr_ci = (lr_l, alpha_lr, lr_u)
     bt_ci = (bt_l[0], alpha_bt[0], bt_u[0])
-    assert np.allclose(lr_ci, bt_ci, atol=0., rtol=1e-2)
+    assert np.allclose(lr_ci, bt_ci, atol=0.0, rtol=1e-2)

@@ -1,18 +1,18 @@
 """Testing utilities."""
 
-import itertools
 from typing import Callable, Iterable, Optional, Sequence, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 from decorator import decorator
 from scipy.stats.mstats import mquantiles
-from sklearn.utils import check_random_state, resample
+from sklearn.utils import check_random_state, indexable, resample
 
 
 def draw_bootstrap_samples(
     values: npt.ArrayLike,
-    sample_size: npt._ShapeLike,
+    sample_size: Optional[npt._ShapeLike] = None,
     n_repeats: Optional[int] = None,
     random_seed: Optional[Union[int, np.random.RandomState]] = None,
 ) -> Iterable[np.ndarray]:
@@ -23,8 +23,8 @@ def draw_bootstrap_samples(
     ----------
     values : npt.ArrayLike
         Values to bootstrap from
-    sample_size : npt._ShapeLike
-        Size/shape of bootstrap batches
+    sample_size : Optional[npt._ShapeLike]
+        Size/shape of batches. If None, defaults to values.shape[0]. By default None
     n_repeats : Optional[int]
         number of bootstrap batches to generate. If None, generate indefinitely. By default None
     random_seed : Optional[Union[int, np.random.RandomState]], optional
@@ -36,6 +36,8 @@ def draw_bootstrap_samples(
         Bootstrap batches
     """
     seed = check_random_state(random_seed)
+
+    sample_size = sample_size if sample_size is not None else values.shape[0]
 
     if n_repeats is None:
         while True:
@@ -56,28 +58,51 @@ Y = TypeVar("Y")
 
 def bootstrap(
     f: Callable[[Sequence[X]], Y],
-    Xs: Sequence[X],
     indices: Iterable[slice],
+    *args: Sequence[X],
+    **kwargs: Sequence[X],
 ) -> Iterable[Y]:
     """
-    Call a function f on subsets of data X[ixs], for each ixs in indices.
+    Call a function f on subsets of data args[ixs], for each ixs in indices.
+
+    Multiple args are indexed in parallel and passed in as multiple arguments to f.
+
+    TODO: allow kwargs as well
+
+    >>> import operator as op
+    >>> X = ['a','b','c']
+    >>> y = ['A','B','C']
+    >>> f = lambda xs, ys: list(map(op.add, xs, ys))
+    >>> batches = bootstrap(f,[[0,1,2], [2,1]],X, y)
+    >>> list(batches)
+    [['aA', 'bB', 'cC'], ['cC', 'bB']]
 
     Parameters
     ----------
     f : Callable[[Sequence[X]], Y]
-        unction to call on each subset of data
-    Xs : Sequence[X]
-        Data to draw from
+        function to call on each subset of data
     indices : Iterable[slice]
         Sequence of subset indices; one set of indices for each bootstrap repeat
+    *args : Sequence[X]
+        Data to draw from; each arg in args should have same first dimension.
 
     Yields
     -------
     Y
-        `f(Xs[ixs])` for the current `ixs` in `indices`
+        output of `f(ixs)` for current ixs in indices
     """
+    # ensure args, kwargs are indexable
+    indexable_args = indexable(*args)
+    kws, kwvalues = kwargs.keys(), kwargs.values()
+    indexable_kwvalues = indexable(*kwvalues)
+    indexable_kwargs = dict(zip(kws, indexable_kwvalues))
+
     for ixs in indices:
-        yield f(Xs[ixs])
+        current_args = [_uniform_index(arg, ixs) for arg in indexable_args]
+        current_kwargs = {
+            kw: _uniform_index(kwarg, ixs) for kw, kwarg in indexable_kwargs.items()
+        }
+        yield f(*current_args, **current_kwargs)
 
 
 def confidence_intervals(
@@ -140,3 +165,16 @@ def repeat_flaky_test(test, n_repeats=2, n_allowed_failures=0, *args, **kwargs):
                 raise e
 
     return values
+
+
+def _uniform_index(
+    data: Union[list, npt.ArrayLike, pd.DataFrame],
+    indices: Union[Sequence[int], slice, npt.ArrayLike],
+):
+    if isinstance(data, list):
+        return [data[i] for i in indices]
+    elif isinstance(data, pd.DataFrame):
+        return data.iloc[indices]
+    else:
+        # breakpoint()
+        return data[indices]
