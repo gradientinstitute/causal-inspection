@@ -13,17 +13,13 @@ from cinspect.evaluators import BinaryTreatmentEffect
 from cinspect.model_evaluation import bootstrap_model, crossval_model
 from numpy.typing import ArrayLike
 from scipy.special import expit
+from sklearn.base import clone
 
 # from sklearn.base import clone # required if we add *best* ridge regressor back in
 from sklearn.kernel_approximation import RBFSampler
-from sklearn.linear_model import Ridge, LinearRegression
-from sklearn.model_selection import (
-    GridSearchCV,
-    RepeatedKFold,
-    ShuffleSplit,
-)
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.model_selection import GridSearchCV, RepeatedKFold, ShuffleSplit
 from sklearn.utils import check_random_state
-from sklearn.base import clone
 
 from simulations.datagen import DGPGraph
 
@@ -33,11 +29,12 @@ LOG = logging.getLogger(__name__)
 # Log INFO to STDOUT
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
-
 TRUE_ATE = 0.3
 
 
-def data_generation(confounder_dim=200, latent_dim=5, random_state=None):
+def data_generation(
+    true_ate=TRUE_ATE, confounder_dim=200, latent_dim=5, random_state=None
+):
     """Specify the data generation process.
 
     This is just a simple "triangle" model with linear relationships.
@@ -65,7 +62,7 @@ def data_generation(confounder_dim=200, latent_dim=5, random_state=None):
 
     # Target properties
     std_y = 0.5
-    W_ty = TRUE_ATE  # true casual effect
+    W_ty = true_ate  # true casual effect
     W_xy = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
 
     def fX(n):

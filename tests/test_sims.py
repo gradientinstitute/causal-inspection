@@ -16,36 +16,50 @@ def _n_x_support_strat(draw):
 @given(
     n_x=st.shared(_n_x_support_strat(), key="nxs").map(lambda tup: tup[0]),
     support_size=st.shared(_n_x_support_strat(), key="nxs").map(lambda tup: tup[1]),
-    random_state=st.one_of(st.integers(min_value=0, max_value=2**32 - 1)),
+    random_state=st.integers(min_value=1, max_value=2**32 - 1),
 )
 def test_simple_data_generation_deterministic(n_x, support_size, random_state):
     """Test that the simple simulation runs deterministically.
 
     Samples from two DGPS constructed with same parameters.
     """
-    result = simple_sim.data_generation(n_x, support_size, random_state)
-    repeat = simple_sim.data_generation(n_x, support_size, random_state)
+    result = simple_sim.data_generation(
+        n_x=n_x, support_size=support_size, random_state=random_state
+    )
+    repeat = simple_sim.data_generation(
+        n_x=n_x, support_size=support_size, random_state=random_state
+    )
     # sample from the dgps and compare samples for equality
     X_res = result.sample(100)
     X_rep = repeat.sample(100)
     same_results = _dicts_of_arrays_equal(X_res, X_rep)
+    # if not same_results:
+    #     breakpoint()
     assert same_results
 
 
 @given(
-    confounder_dims=st.integers(min_value=1, max_value=100),
-    latent_dims=st.integers(min_value=1, max_value=100),
-    random_state=st.one_of(st.integers(min_value=0, max_value=2**32 - 1)),
+    confounder_dim=st.integers(min_value=1, max_value=100),
+    latent_dim=st.integers(min_value=1, max_value=100),
+    random_state=st.integers(min_value=0, max_value=2**32 - 1),
 )
 def test_collinear_data_generation_deterministic(
-    confounder_dims, latent_dims, random_state
+    confounder_dim, latent_dim, random_state
 ):
     """Test that the collinear simulation runs deterministically.
 
     Samples from two DGPS constructed with same parameters.
     """
-    result = collinear_sim.data_generation(confounder_dims, latent_dims, random_state)
-    repeat = collinear_sim.data_generation(confounder_dims, latent_dims, random_state)
+    result = collinear_sim.data_generation(
+        confounder_dim=confounder_dim,
+        latent_dim=latent_dim,
+        random_state=random_state,
+    )
+    repeat = collinear_sim.data_generation(
+        confounder_dim=confounder_dim,
+        latent_dim=latent_dim,
+        random_state=random_state,
+    )
     # sample from the dgps and compare samples for equality
     X_res = result.sample(100)
     X_rep = repeat.sample(100)

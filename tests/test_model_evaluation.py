@@ -19,6 +19,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
 
+import test_utils
 import testing_strategies
 
 logger = logging.getLogger()
@@ -178,38 +179,12 @@ class _MockLinearEstimator(BaseEstimator):
         return y_pred
 
 
+@test_utils.repeat_flaky_test(
+    # replicate to reduce chance of false positive
+    n_repeats=10, n_allowed_failures=1
+    )
 def test_bootstrap_samples_from_eval_distribution(
-    make_simple_data, n_bootstraps=10, n_repeats=10, seed=None
-):
-    """Test that true mean is in 95%CI of bootstrap samples.
-
-    If there is a very probability that it's not, this test fails.
-
-    This test simply repeats _test_bootstrap_samples_from_eval_distribution n_repeats times,
-    with n_bootstraps bootstraps each time,
-    and fails if it fails 100% of the time; chance of false failure is ~0.05**(n_repeats).
-
-    The default of 10 repeats puts us at a 1:1e14 chance of false failure.
-
-    This is obviously at the expense of allowing more false passes.
-    """
-    # generate a sequence of random seeds
-    rng = check_random_state(seed)
-    seeds = rng.randint(0, 10000, size=n_repeats)
-    logger.info(f"seeds {seeds}")
-
-    within_bound_list = [
-        _test_bootstrap_samples_from_eval_distribution(
-            n_bootstraps, random_state, make_simple_data
-        )
-        for random_state in seeds
-    ]
-
-    assert np.any(within_bound_list)
-
-
-def _test_bootstrap_samples_from_eval_distribution(
-        n_bootstraps, random_state, make_simple_data
+        make_simple_data, n_bootstraps=10, random_state=42
 ):
     """Test that true mean is in 95%CI of bootstrap samples.
 
@@ -222,6 +197,7 @@ def _test_bootstrap_samples_from_eval_distribution(
     in which case there's a 5% chance of a false negative,
     in which case change the seed?)
     """
+    random_state = check_random_state(random_state)
     estimator = _MockEstimator()
     X, y = make_simple_data
 
@@ -275,6 +251,8 @@ def test_bootcross_split(random_state, test_size):
 # ---------- Fuzz-test bootstrap_model -------------
 
 # * Helpers *
+
+
 estimator_strategy = hst.one_of(
     hst.builds(DummyRegressor), hst.builds(LinearRegression)
 )
@@ -332,9 +310,8 @@ def test_fuzz_bootstrap_model(
 
 
 # Data source strategy for each test
-n = 100
-Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n),
-                                key="Xy_pd")
+n = 30  # Number of rows. Setting this too high may make test generation prohibitively slow
+Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n), key="Xy_pd")
 
 # derived strategies
 X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
@@ -342,7 +319,7 @@ y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 test_size_strategy = hst.one_of(
     hst.integers(min_value=1, max_value=n - 1),
-    hst.floats(min_value=1. / n, max_value=99. / n),
+    hst.floats(min_value=1.0 / n, max_value=(n-1.0) / n),
 )
 
 
@@ -378,6 +355,7 @@ def test_fuzz_bootcross_model(
         # basically all overflows or similar due to random data generation
         logger.warning(ve)
         hyp.reject()
+
 
 # ---------- Fuzz-test crossval_model -------------
 
