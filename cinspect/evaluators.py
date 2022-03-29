@@ -688,11 +688,12 @@ def _merge_dicts_of_lists_by_concatting(
 
     Not commutative (as list concatenation is not commutative), but not lossy.
 
-    >>> _merge_dicts_of_lists_by_concatting({"k1": [1,2], "k2": [3]}, {"k1": [4], "k3": [5]})
-    {"k1": [1,2,4], "k2": [3], "k3": [5]}
+    >>> merged = _merge_dicts_of_lists_by_concatting({"k1": [1,2], "k2": [3]}, {"k1": [4], "k3": [5]})
+    >>> merged == {"k1": [1,2,4], "k2": [3], "k3": [5]}
+    True
     """
     merged_dict = {
-        k: dict1.get(k, default=[]) + dict2.get(k, default=[])
-        for k in dict1.keys() + dict2.keys()
+        k: dict1.get(k, []) + dict2.get(k, [])
+        for k in set(dict1.keys()).union(set(dict2.keys()))
     }
     return merged_dict
