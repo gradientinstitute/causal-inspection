@@ -182,7 +182,8 @@ def construct_grid(
                 grid = np.linspace(low, high, grid_values)
             except Exception:  # TODO: make more specific
                 raise ValueError(
-                    "Could not create grid: " f"linspace({low}, {high}, {grid_values})"
+                    "Could not create grid: "
+                    "linspace({low}, {high}, {grid_values})"
                 )
 
     return grid, grid_counts
