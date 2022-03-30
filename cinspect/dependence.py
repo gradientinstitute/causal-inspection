@@ -3,7 +3,7 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -129,7 +129,8 @@ def construct_grid(
     -------
     grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
         Constructed grid, and its counts of unique elements.
-        Returns counts iff grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+        Returned grid_counts is not None iff
+            grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
 
     Raises
     ------
@@ -139,7 +140,7 @@ def construct_grid(
     grid_counts = None
     grid = None
 
-    if isinstance(grid_values, Union[List, Tuple, np.ndarray]):
+    if isinstance(grid_values, (List, Tuple, np.ndarray)):
         # check grid_values is not an array,
         # as np.array==str raises a futurewarning
         grid_values = np.asarray(grid_values)
@@ -182,8 +183,7 @@ def construct_grid(
                 grid = np.linspace(low, high, grid_values)
             except Exception:  # TODO: make more specific
                 raise ValueError(
-                    "Could not create grid: "
-                    "linspace({low}, {high}, {grid_values})"
+                    "Could not create grid: " "linspace({low}, {high}, {grid_values})"
                 )
 
     return grid, grid_counts
