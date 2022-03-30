@@ -6,7 +6,8 @@ import hypothesis as hyp
 import hypothesis.strategies as hst
 import numpy as np
 import pytest
-from cinspect.dependence import _pd_interval, individual_conditional_expectation
+from cinspect.dependence import (_pd_interval,
+                                 individual_conditional_expectation)
 from cinspect.estimators import LinearRegressionStat
 from hypothesis.extra import numpy as hnp
 from scipy.stats import norm
@@ -93,7 +94,7 @@ def test_conf_interval(linear_causal_data, ci):
     auto_threshold=hst.integers(),
 )
 def test_basic_construct_grid(grid_values, v, auto_threshold):
-
+    """Test that construct_grid functions, and that grid_counts is None when expected."""
     grid, counts = dependence.construct_grid(
         grid_values, v=v, auto_threshold=auto_threshold
     )

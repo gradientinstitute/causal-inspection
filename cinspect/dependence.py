@@ -3,7 +3,7 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -129,7 +129,8 @@ def construct_grid(
     -------
     grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
         Constructed grid, and its counts of unique elements.
-        Returned grid_counts is not None iff grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+        Returned grid_counts is not None iff
+            grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
 
     Raises
     ------
