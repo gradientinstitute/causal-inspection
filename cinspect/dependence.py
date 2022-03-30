@@ -129,7 +129,7 @@ def construct_grid(
     -------
     grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
         Constructed grid, and its counts of unique elements.
-        Returns counts iff grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+        Returned grid_counts is not None iff grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
 
     Raises
     ------
@@ -139,7 +139,12 @@ def construct_grid(
     grid_counts = None
     grid = None
 
-    if isinstance(grid_values, Union[List, Tuple, np.ndarray]):
+    def is_list_tuple_or_array(
+        x,
+    ):  # For Python >3.10:  -> TypeGuard[Union[List, Tuple, np.ndarray]]:
+        return isinstance(x, List) or isinstance(x, Tuple) or isinstance(x, np.ndarray)
+
+    if is_list_tuple_or_array(grid_values):
         # check grid_values is not an array,
         # as np.array==str raises a futurewarning
         grid_values = np.asarray(grid_values)
@@ -182,8 +187,7 @@ def construct_grid(
                 grid = np.linspace(low, high, grid_values)
             except Exception:  # TODO: make more specific
                 raise ValueError(
-                    "Could not create grid: "
-                    "linspace({low}, {high}, {grid_values})"
+                    "Could not create grid: " "linspace({low}, {high}, {grid_values})"
                 )
 
     return grid, grid_counts
