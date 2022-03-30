@@ -1,7 +1,9 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Tests for model_evaluation module."""
+import functools
 import logging
+import operator
 from typing import Callable
 
 import hypothesis as hyp
@@ -77,8 +79,9 @@ def test_eval_function_calls(eval_func, make_simple_data):
     evaluators = [_MockEvaluator()]
     X, y = make_simple_data
 
-    evaluators = eval_func(estimator, X, y, evaluators)
-    assert evaluators[0].aggregate_call  # type: ignore
+    eval_results = eval_func(estimator, X, y, evaluators)
+
+    assert all([eval.aggregate_call for (eval, _) in eval_results])
 
 
 @pytest.mark.parametrize("eval_func", [bootcross_model, bootstrap_model])
@@ -116,14 +119,17 @@ class _MockRandomEvaluator(Evaluator):
         # pass through/seed/create new rng as appropriate
         self._random_state = check_random_state(self._random_state)
         result = self._sample_from_rng_with_distribution(self._random_state)
-        # intended semantics is that repeated calls *append* to internal state
-        self._results.append(result)
+        # breakpoint()
 
-        return result
-
-    def get_results(self):
+        return [result]
+    
+    def aggregate(self, evaluations):
+        aggregated_eval = functools.reduce(operator.add, evaluations)
+        return aggregated_eval
+    
+    def view_results(self, results):
         """Return (random) evaluation."""
-        return self._results
+        return results
 
 
 random_seeds = [42, np.random.RandomState()]
@@ -181,10 +187,11 @@ class _MockLinearEstimator(BaseEstimator):
 
 @test_utils.repeat_flaky_test(
     # replicate to reduce chance of false positive
-    n_repeats=10, n_allowed_failures=1
-    )
+    n_repeats=10,
+    n_allowed_failures=1,
+)
 def test_bootstrap_samples_from_eval_distribution(
-        make_simple_data, n_bootstraps=10, random_state=42
+    make_simple_data, n_bootstraps=10, random_state=42
 ):
     """Test that true mean is in 95%CI of bootstrap samples.
 
@@ -215,15 +222,17 @@ def test_bootstrap_samples_from_eval_distribution(
     evaluator = _MockRandomEvaluator(sample_from_normal)
 
     # seed from which to generate a sequence of random seeds
-    [evaluator_] = bootstrap_model(
+    ev_results = list(bootstrap_model(
         estimator,
         X,
         y,
         [evaluator],
         replications=n_bootstraps,
         random_state=random_state,
-    )
-    results = evaluator_.get_results()
+    ))
+    results = [r for (_,r) in ev_results]
+    logger.warning(f"BS RESULTS: {results}")
+    # breakpoint()
     bs_mean = np.mean(results)
 
     logger.info(f"Checking that {mean} is within {bs_mean} +- {bound}")
@@ -264,10 +273,15 @@ X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
 y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 
-evaluators_strategy = hst.lists(hst.builds(Evaluator), max_size=10)
+evaluators_strategy = hst.lists(hst.builds(Evaluator), max_size=3)
 random_state_strategy = hst.one_of(
     hst.none(),
     hst.integers(min_value=0, max_value=2**32 - 1),
+    hst.builds(RandomState),
+)
+small_random_state_strategy = hst.one_of(
+    hst.none(),
+    hst.integers(min_value=0, max_value=10),
     hst.builds(RandomState),
 )
 
@@ -282,7 +296,7 @@ random_state_strategy = hst.one_of(
     replications=hst.integers(
         min_value=1, max_value=10
     ),  # TODO: max_value should be increased when parallelising
-    random_state=random_state_strategy,
+    random_state=small_random_state_strategy,
     use_group_cv=hst.booleans(),
 )
 def test_fuzz_bootstrap_model(
@@ -319,7 +333,7 @@ y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 test_size_strategy = hst.one_of(
     hst.integers(min_value=1, max_value=n - 1),
-    hst.floats(min_value=1.0 / n, max_value=(n-1.0) / n),
+    hst.floats(min_value=1.0 / n, max_value=(n - 1.0) / n),
 )
 
 
@@ -329,10 +343,10 @@ test_size_strategy = hst.one_of(
     y=y_strategy,
     evaluators=evaluators_strategy,
     replications=hst.integers(
-        min_value=1, max_value=10
+        min_value=1, max_value=5
     ),  # TODO: max_value should be increased when parallelising
     test_size=test_size_strategy,
-    random_state=random_state_strategy,
+    random_state=small_random_state_strategy,
     use_group_cv=hst.booleans(),
 )
 def test_fuzz_bootcross_model(
@@ -370,7 +384,7 @@ def _n_samples(draw: Callable, min_bound_strat: hst.SearchStrategy[int]) -> int:
 
 # many cross-val strategies depend on the number of folds;
 # this must be shared between the strategies for each test
-n_folds = hst.shared(hst.integers(min_value=2, max_value=10), key="n_folds")
+n_folds = hst.shared(hst.integers(min_value=2, max_value=5), key="n_folds")
 
 n_rows = hst.shared(
     # min n_rows = n_folds + 1 ; required by some folds
@@ -404,14 +418,14 @@ y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
         # TODO: encode/document the dependence between n_folds and stratification groups
         #       as this breaks stratification
         #        hst.builds(StratifiedKFold, n_splits=n_folds),
-        # TODO: must to pass groups (indices) parameter if we want to use grouping cvs
+        # TODO: must pass groups (indices) parameter if we want to use grouping cvs
         #        hst.builds(GroupKFold, n_splits=n_folds),
         #        hst.builds(StratifiedGroupKFold, n_splits=n_folds),
         #        hst.builds(LeaveOneGroupOut),
         # TODO: None doesn't work if data has <5 rows
         # hst.none(),
     ),
-    random_state=random_state_strategy,
+    random_state=small_random_state_strategy,
     stratify=hst.one_of(
         # TODO: None fails if we use a CV that expects stratification
         hst.none(),
