@@ -6,8 +6,7 @@ import hypothesis as hyp
 import hypothesis.strategies as hst
 import numpy as np
 import pytest
-from cinspect.dependence import (_pd_interval,
-                                 individual_conditional_expectation)
+from cinspect.dependence import _pd_interval, individual_conditional_expectation
 from cinspect.estimators import LinearRegressionStat
 from hypothesis.extra import numpy as hnp
 from scipy.stats import norm

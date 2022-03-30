@@ -140,12 +140,7 @@ def construct_grid(
     grid_counts = None
     grid = None
 
-    def is_list_tuple_or_array(
-        x,
-    ):  # For Python >3.10:  -> TypeGuard[Union[List, Tuple, np.ndarray]]:
-        return isinstance(x, List) or isinstance(x, Tuple) or isinstance(x, np.ndarray)
-
-    if is_list_tuple_or_array(grid_values):
+    if isinstance(grid_values, (List, Tuple, np.ndarray)):
         # check grid_values is not an array,
         # as np.array==str raises a futurewarning
         grid_values = np.asarray(grid_values)
