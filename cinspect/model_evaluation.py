@@ -7,7 +7,6 @@ import inspect
 import logging
 import time
 from functools import singledispatch
-from tabnanny import check
 from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
