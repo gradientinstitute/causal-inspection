@@ -42,10 +42,28 @@ class _MockEstimator(BaseEstimator):
 
 
 class _MockGroupEstimator(_MockEstimator):
+    """Makes predictions of const 1 if groups is passed, and const 0 if not."""
+
     def fit(self, X, y, groups=None):
         self.is_fitted = True
         self.groups_called = True if groups is not None else False
+        self.y_dim_ = 1 if len(y.shape) == 1 else y.shape[1]
         return self
+
+    def predict(self, X):
+        y_shape = (X[0], self.y_dim_)
+        if self.groups_called:
+            return np.ones(y_shape)
+        else:
+            return np.zeros(y_shape)
+    
+    def groups_called(self, prediction):
+        groups_called = np.all(prediction == 1)
+        groups_not_called = np.all(prediction == 0)
+        # xor; otherwise the prediction is neither all 0s or all 1s
+        # and so cannot have been made by/trivially derived from aggregations of this estimator
+        assert groups_called ^ groups_not_called, f"Invalid prediction {prediction}"
+        return groups_called
 
 
 class _MockEvaluator(Evaluator):
@@ -89,16 +107,18 @@ def test_eval_function_calls(eval_func, make_simple_data):
 @pytest.mark.parametrize("estimator", [_MockGroupEstimator, _MockEstimator])
 @pytest.mark.parametrize("flag", [True, False])
 def test_groups_input(eval_func, estimator, flag, make_simple_data):
-    """Test that groups are input to the estimator as expected."""
+    """Test that groups are input to the estimator as expected.
+
+    TODO: test that groupings are respected as intended.
+
+    Uses _MockGroupEstimator to test this observationally."""
     estimator = _MockEstimator()
     evaluators = [_MockEvaluator()]
     X, y = make_simple_data
 
-    evaluators = eval_func(estimator, X, y, evaluators, use_group_cv=flag)
-    if isinstance(estimator, _MockGroupEstimator) and flag:
-        assert estimator.groups_called
-    else:
-        assert not estimator.groups_called
+    evaluations = eval_func(estimator, X, y, evaluators, use_group_cv=flag)
+    if isinstance(estimator, _MockGroupEstimator):
+        assert flag == estimator.groups_called(evaluations), "Groups not used as intended."
 
 
 class _MockRandomEvaluator(Evaluator):
@@ -507,7 +527,6 @@ def test_crossval_parallelism(estimator, X, y, evaluators, cv, n_jobs):
 
 @hyp.settings(deadline=None)  # disable for multiprocessing
 @given(
-    evaluator=hst.sampled_from([bootcross_model, bootstrap_model]),
     estimator=estimator_strategy,
     X=X_strategy,
     y=y_strategy,
