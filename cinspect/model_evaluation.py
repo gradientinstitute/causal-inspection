@@ -7,8 +7,9 @@ import inspect
 import logging
 import time
 from functools import singledispatch
-from typing import Optional, Sequence, Tuple, Union
+from typing import Any, Optional, Sequence, Tuple, Union
 
+import joblib
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
@@ -32,6 +33,7 @@ def crossval_model(
     ] = None,  # defaults to KFold(n_splits=5)
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     stratify: Optional[Union[np.ndarray, pd.Series]] = None,
+    n_jobs=-1,
 ) -> Sequence[Evaluator]:
     """
     Evaluate a model using cross validation.
@@ -47,7 +49,7 @@ def crossval_model(
         cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
     cross_val_split_generator = cv.split(X, stratify)
-    eval_results = _repeatedly_evaluate_model(
+    evalutors_evaluations = _repeatedly_evaluate_model(
         estimator=estimator,
         X=X,
         y=y,
@@ -55,9 +57,13 @@ def crossval_model(
         evaluators=evaluators,
         use_group_cv=False,
         random_state=random_state,
-        name_for_logging="Bootstrap",
+        name_for_logging="Cross validate",
+        n_jobs=n_jobs,
     )
-    return eval_results
+
+    _set_evaluators_evaluations(evalutors_evaluations)
+
+    return evalutors_evaluations
 
 
 def bootstrap_model(
@@ -68,6 +74,7 @@ def bootstrap_model(
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
+    n_jobs=-1,
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -95,7 +102,7 @@ def bootstrap_model(
         (split1 := resample(indices, random_state=random_state), split1)
         for _ in range(replications)
     )
-    eval_results = _repeatedly_evaluate_model(
+    evalutors_evaluations = _repeatedly_evaluate_model(
         estimator=estimator,
         X=X,
         y=y,
@@ -104,13 +111,10 @@ def bootstrap_model(
         use_group_cv=use_group_cv,
         random_state=random_state,
         name_for_logging="Bootstrap",
+        n_jobs=n_jobs,
     )
-    return eval_results
-
-    for ev in evaluators:
-        ev.aggregate()
-
-    return evaluators
+    _set_evaluators_evaluations(evalutors_evaluations)
+    return evalutors_evaluations
 
 
 def bootcross_model(
@@ -122,7 +126,8 @@ def bootcross_model(
     test_size: Union[int, float] = 0.25,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
-) -> Sequence[Evaluator]:
+    n_jobs=-1,
+) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Use bootstrapping to compute random train/test folds (no sample sharing).
 
@@ -148,11 +153,10 @@ def bootcross_model(
         if test_size <= 0 or test_size >= n:
             raise ValueError("test_size must be within the size of X")
 
-    LOG.info("Bootstrap crossing...")
     bootcross_split_generator = (
         _bootcross_split(n, test_size, random_state) for _ in range(replications)
     )
-    eval_results = _repeatedly_evaluate_model(
+    evalutors_evaluations = _repeatedly_evaluate_model(
         estimator=estimator,
         X=X,
         y=y,
@@ -160,10 +164,12 @@ def bootcross_model(
         evaluators=evaluators,
         use_group_cv=use_group_cv,
         random_state=random_state,
-        name_for_logging="Bootstrap-crossing",
+        name_for_logging="Bootstrap-cross",
+        n_jobs=n_jobs,
     )
+    _set_evaluators_evaluations(evalutors_evaluations)
 
-    return eval_results
+    return evalutors_evaluations
 
 
 def _check_group_estimator(estimator, use_group_cv):
@@ -207,21 +213,21 @@ def _repeatedly_evaluate_model(
     evaluators: Sequence[Evaluator],
     use_group_cv: bool = False,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
+    n_jobs=-1,
     name_for_logging: str = "Evaluation",
-):
+) -> Sequence[Tuple[Evaluator, Any]]:
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
 
     for ev in evaluators:
         ev.prepare(estimator, X, y, random_state=random_state)
 
-    results_per_iteration = []
-    LOG.info(f"{name_for_logging}...")
-    for i, (r_ind, s_ind) in enumerate(train_test_indices_generator):
-        LOG.info(f"{name_for_logging} round {i + 1}")
+    def eval_iter_f(train_test_indices_tuple):
+        r_ind, s_ind = train_test_indices_tuple
+        LOG.info(f"{name_for_logging}")  # round {i + 1}")
         start = time.time()
 
-        results = [
+        evaluations = [
             _train_evaluate_model(
                 estimator,
                 X,
@@ -233,21 +239,31 @@ def _repeatedly_evaluate_model(
             )
             for ev in evaluators
         ]
-        results_per_iteration.append(results)
 
         end = time.time()
         LOG.info(f"... iteration time {end - start:.2f}s")
+        return evaluations
+
+    LOG.info(f"{name_for_logging}...")
+    evaluations_per_iteration = joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(eval_iter_f)(tr_tst_ix)
+        for tr_tst_ix in train_test_indices_generator
+    )
+
     # aggregate over iterations for each evaluator
-    results_combined = [
+    evaluations_combined = [
         evaluators[j].aggregate(
-            [iter_results[j] for iter_results in results_per_iteration]
+            [iter_results[j] for iter_results in evaluations_per_iteration]
         )
         for j in range(len(evaluators))
     ]
-    # breakpoint()
     LOG.info(f"{name_for_logging} complete")
 
-    return list(zip(evaluators, results_combined))
+    return list(zip(evaluators, evaluations_combined))
+
+
+def _set_evaluators_evaluations(evaluators_and_their_evaluations):
+    map(lambda tor, tion: tor.set_evaluation(tion), evaluators_and_their_evaluations)
 
 
 def _train_evaluate_model(
@@ -291,7 +307,7 @@ def _evaluate_model(
     X: pd.DataFrame,
     y: Union[pd.DataFrame, pd.Series],
     evaluator: Evaluator,
-    test_indices: Sequence[int]
+    test_indices: Sequence[int],
 ):
     evaluation = evaluator.evaluate(
         estimator, _get_rows(X, test_indices), _get_rows(y, test_indices)

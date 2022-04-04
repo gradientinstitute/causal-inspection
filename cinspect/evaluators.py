@@ -6,7 +6,7 @@ import functools
 import logging
 import operator
 from collections import defaultdict
-from typing import Any, Dict, List, Sequence, TypeVar, Union
+from typing import Any, Dict, List, Optional, Sequence, TypeVar, Union
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -50,13 +50,35 @@ class Evaluator:
         """
         pass
 
-    def get_results(self, evaluation: Evaluation) -> Any:
+    def set_evaluation(self, evaluation: Evaluation):
+        """Setter; sets this object's evaluation.
+
+        Subclasses should ensure that this and self.prepare(..)
+        are the only ways to modify internal state.
+
+
+        Parameters
+        ----------
+        evaluation : Evaluation
+            The new internal evaluation.
+        """
+        self.evaluation = evaluation
+
+    def get_results(
+        self, evaluation: Optional[Evaluation] = None, **kwargs
+    ) -> Optional[Any]:
         """View the evaluator's results.
 
+        Default implementation returns the given evaluation/the stored evaluation.
+        but this may be overridden if there is a canonical representation of the results
+        that differs from the results' internal representation.
+
         This could be a pandas dataframe, a matplotlib figure, etc.
-        This is called by the end user explicitly.
         """
-        pass
+        evaluation = (
+            evaluation if evaluation is not None else getattr(self, "evaluation", None)
+        )
+        return self.evaluation
 
 
 class ScoreEvaluator(Evaluator):
@@ -106,7 +128,8 @@ class ScoreEvaluator(Evaluator):
 
     def get_results(self, evaluation, **kwargs):
         """Get the scores of the estimator."""
-        dfscores = pd.DataFrame(evaluation)
+        evaluation = evaluation if evaluation is not None else self.evaluation
+        dfscores = pd.DataFrame(evaluation) if evaluation is not None else None
         return dfscores
 
 
@@ -200,6 +223,7 @@ class BinaryTreatmentEffect(Evaluator):
             A sequence of confidence interval levels as specified by
             `ci_probs`.
         """
+        evaluation = self.super().get_results(evaluation)
         for p in ci_probs:
             if p < 0 or p > 1:
                 raise ValueError("ci_probs must be in range [0, 1].")
@@ -352,6 +376,7 @@ class PartialDependanceEvaluator(Evaluator):
         RuntimeError
             Raised if a dependency is invalid.
         """
+        evaluation = self.super().get_results(evaluation)
         figs, ress = {}, {}
         for dep_name, dep in self.dep_params.items():
             predictions = evaluation[dep_name]
@@ -562,6 +587,7 @@ class PermutationImportanceEvaluator(Evaluator):
         mpl.figure.Figure
             Permutation importance figure
         """
+        evaluation = self.super().get_results(evaluation)
         samples = np.hstack(evaluation)
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"

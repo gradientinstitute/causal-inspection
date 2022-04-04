@@ -51,7 +51,7 @@ def Xy_np(
         n_rows_ = n_rows
 
     n_X_cols = draw(hst.integers(min_value=1, max_value=10))
-    n_y_cols = draw(hst.integers(min_value=1, max_value=10))
+    n_y_cols = draw(hst.integers(min_value=1, max_value=2))
 
     X_shape = (n_rows_, n_X_cols)
     y_shape = (n_rows_, n_y_cols)

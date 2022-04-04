@@ -1,6 +1,7 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Tests for model_evaluation module."""
+
 import functools
 import logging
 import operator
@@ -61,11 +62,11 @@ class _MockEvaluator(Evaluator):
 
     def evaluate(self, estimator, X, y=None):
         assert estimator.is_fitted
-        assert not self.aggregate_call
+        # assert not self.aggregate_call # no longer required; aggregate() should not change state
         self.eval = True
 
     def aggregate(self, name=None, estimator_score=None, outdir=None):
-        assert self.eval
+        # assert self.eval # no longer required; evaluate() should not change state
         self.aggregate_call = True
 
 
@@ -79,7 +80,7 @@ def test_eval_function_calls(eval_func, make_simple_data):
     evaluators = [_MockEvaluator()]
     X, y = make_simple_data
 
-    eval_results = eval_func(estimator, X, y, evaluators)
+    eval_results = eval_func(estimator=estimator, X=X, y=y, evaluators=evaluators)
 
     assert all([eval.aggregate_call for (eval, _) in eval_results])
 
@@ -122,11 +123,11 @@ class _MockRandomEvaluator(Evaluator):
         # breakpoint()
 
         return [result]
-    
+
     def aggregate(self, evaluations):
         aggregated_eval = functools.reduce(operator.add, evaluations)
         return aggregated_eval
-    
+
     def view_results(self, results):
         """Return (random) evaluation."""
         return results
@@ -222,15 +223,17 @@ def test_bootstrap_samples_from_eval_distribution(
     evaluator = _MockRandomEvaluator(sample_from_normal)
 
     # seed from which to generate a sequence of random seeds
-    ev_results = list(bootstrap_model(
-        estimator,
-        X,
-        y,
-        [evaluator],
-        replications=n_bootstraps,
-        random_state=random_state,
-    ))
-    results = [r for (_,r) in ev_results]
+    ev_results = list(
+        bootstrap_model(
+            estimator,
+            X,
+            y,
+            [evaluator],
+            replications=n_bootstraps,
+            random_state=random_state,
+        )
+    )
+    results = [r for (_, r) in ev_results]
     logger.warning(f"BS RESULTS: {results}")
     # breakpoint()
     bs_mean = np.mean(results)
@@ -288,6 +291,8 @@ small_random_state_strategy = hst.one_of(
 
 # Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
+
+
 @given(
     estimator=estimator_strategy,
     X=X_strategy,
@@ -312,6 +317,7 @@ def test_fuzz_bootstrap_model(
             replications=replications,
             random_state=random_state,
             use_group_cv=use_group_cv,
+            n_jobs=1,
         )
     except ValueError as ve:
         # Discard value errors;
@@ -324,12 +330,12 @@ def test_fuzz_bootstrap_model(
 
 
 # Data source strategy for each test
-n = 30  # Number of rows. Setting this too high may make test generation prohibitively slow
-Xy_strategy_shared = hst.shared(testing_strategies.Xy_pd(n_rows=n), key="Xy_pd")
+n = 10  # Number of rows. Setting this too high may make test generation prohibitively slow
+Xy_strategy_shared_bc = hst.shared(testing_strategies.Xy_pd(n_rows=n), key="Xy_pd_bc")
 
 # derived strategies
-X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
-y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
+X_strategy = Xy_strategy_shared_bc.map(lambda Xy: Xy[0])
+y_strategy = Xy_strategy_shared_bc.map(lambda Xy: Xy[1])
 
 test_size_strategy = hst.one_of(
     hst.integers(min_value=1, max_value=n - 1),
@@ -363,6 +369,7 @@ def test_fuzz_bootcross_model(
             test_size=test_size,
             random_state=random_state,
             use_group_cv=use_group_cv,
+            n_jobs=1,
         )
     except ValueError as ve:
         # Discard value errors;
@@ -439,7 +446,10 @@ y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
     ),
 )
 def test_fuzz_crossval_model(estimator, X, y, evaluators, cv, random_state, stratify):
-    """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions."""
+    """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions.
+
+    Single-threaded for the sake of timing
+    """
     try:
         crossval_model(
             estimator=estimator,
@@ -449,6 +459,115 @@ def test_fuzz_crossval_model(estimator, X, y, evaluators, cv, random_state, stra
             cv=cv,
             random_state=random_state,
             stratify=stratify,
+            n_jobs=1,
+        )
+    except ValueError as ve:
+        # Discard value errors;
+        # basically all overflows or similar due to random data generation
+        logger.warning(ve)
+        hyp.reject()
+
+
+def _test_invariance_to_n_jobs(fn, n_jobs=-1, *args, **kwargs):
+    assert fn(*args, **kwargs, n_jobs=1) == fn(*args, **kwargs, n_jobs=n_jobs)
+
+
+@hyp.settings(deadline=None)
+@given(
+    estimator=estimator_strategy,
+    X=X_strategy_bounded,
+    y=y_strategy_bounded,
+    evaluators=evaluators_strategy,
+    cv=hst.one_of(
+        n_folds,
+        hst.builds(LeaveOneOut),
+        hst.builds(TimeSeriesSplit, n_splits=n_folds),
+    ),
+    n_jobs=hst.sampled_from([2]),
+)
+def test_crossval_parallelism(estimator, X, y, evaluators, cv, n_jobs):
+    """Tests that n_jobs doesn't affect."""
+    try:
+        _test_invariance_to_n_jobs(
+            crossval_model,
+            n_jobs=n_jobs,
+            estimator=estimator,
+            X=X,
+            y=y,
+            evaluators=evaluators,
+            cv=cv,
+            random_state=0,
+        )
+    except ValueError as ve:
+        # Discard value errors;
+        # basically all overflows or similar due to random data generation
+        logger.warning(ve)
+        hyp.reject()
+
+
+@hyp.settings(deadline=None)  # disable for multiprocessing
+@given(
+    evaluator=hst.sampled_from([bootcross_model, bootstrap_model]),
+    estimator=estimator_strategy,
+    X=X_strategy,
+    y=y_strategy,
+    evaluators=evaluators_strategy,
+    replications=hst.integers(
+        min_value=1, max_value=10
+    ),  # TODO: max_value should be increased when parallelising
+    use_group_cv=hst.booleans(),
+    n_jobs=hst.sampled_from([2]),
+)
+def test_bootstrap_parallelism(
+    estimator, X, y, evaluators, replications, use_group_cv, n_jobs
+):
+    """Tests that n_jobs doesn't affect."""
+    try:
+        _test_invariance_to_n_jobs(
+            bootstrap_model,
+            n_jobs=n_jobs,
+            estimator=estimator,
+            X=X,
+            y=y,
+            evaluators=evaluators,
+            replications=replications,
+            use_group_cv=use_group_cv,
+            random_state=0,
+        )
+    except ValueError as ve:
+        # Discard value errors;
+        # basically all overflows or similar due to random data generation
+        logger.warning(ve)
+        hyp.reject()
+
+
+@hyp.settings(deadline=None)  # disable for multiprocessing
+@given(
+    estimator=estimator_strategy,
+    X=X_strategy,
+    y=y_strategy,
+    evaluators=evaluators_strategy,
+    replications=hst.integers(
+        min_value=2, max_value=6
+    ),  # TODO: max_value should be increased when parallelising
+    use_group_cv=hst.booleans(),
+    n_jobs=hst.sampled_from([2]),
+)
+def test_bootcross_parallelism(
+    estimator, X, y, evaluators, replications, use_group_cv, n_jobs
+):
+
+    try:
+        bootcross_model(
+            estimator=estimator,
+            X=X,
+            y=y,
+            evaluators=evaluators,
+            replications=replications,
+            test_size=0.4,
+            random_state=0,
+            use_group_cv=use_group_cv,
+            n_jobs=n_jobs,
         )
     except ValueError as ve:
         # Discard value errors;
