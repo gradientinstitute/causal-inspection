@@ -11,7 +11,7 @@ import hypothesis as hyp
 import hypothesis.strategies as hst
 import numpy as np
 import pytest
-from cinspect.evaluators import Evaluator
+from cinspect.evaluators import Evaluator, ScoreEvaluator
 from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
                                        bootstrap_model, crossval_model)
 from hypothesis import given
@@ -296,7 +296,8 @@ X_strategy = Xy_strategy_shared.map(lambda Xy: Xy[0])
 y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 
-evaluators_strategy = hst.lists(hst.builds(Evaluator), max_size=3)
+dummy_evaluators_strategy = hst.lists(hst.builds(Evaluator), max_size=3)
+simple_evaluators_strategy=hst.lists(hst.builds(ScoreEvaluator, scorers=hst.lists(hst.sampled_from(["r2", "explained_variance"]),max_size=1)))
 random_state_strategy = hst.one_of(
     hst.none(),
     hst.integers(min_value=0, max_value=2**32 - 1),
@@ -317,12 +318,12 @@ small_random_state_strategy = hst.one_of(
     estimator=estimator_strategy,
     X=X_strategy,
     y=y_strategy,
-    evaluators=evaluators_strategy,
+    evaluators=dummy_evaluators_strategy,
     replications=hst.integers(
         min_value=1, max_value=10
     ),  # TODO: max_value should be increased when parallelising
     random_state=small_random_state_strategy,
-    use_group_cv=hst.booleans(),
+    use_group_cv=hst.sampled_from([False]),
 )
 def test_fuzz_bootstrap_model(
     estimator, X, y, evaluators, replications, random_state, use_group_cv
@@ -367,7 +368,7 @@ test_size_strategy = hst.one_of(
     estimator=estimator_strategy,
     X=X_strategy,
     y=y_strategy,
-    evaluators=evaluators_strategy,
+    evaluators=dummy_evaluators_strategy,
     replications=hst.integers(
         min_value=1, max_value=5
     ),  # TODO: max_value should be increased when parallelising
@@ -435,7 +436,7 @@ y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
     estimator=estimator_strategy,
     X=X_strategy_bounded,
     y=y_strategy_bounded,
-    evaluators=evaluators_strategy,
+    evaluators=dummy_evaluators_strategy,
     cv=hst.one_of(
         # implicit KFold; number of folds
         n_folds,
@@ -497,7 +498,7 @@ def _test_invariance_to_n_jobs(fn, n_jobs=-1, *args, **kwargs):
     estimator=estimator_strategy,
     X=X_strategy_bounded,
     y=y_strategy_bounded,
-    evaluators=evaluators_strategy,
+    evaluators=simple_evaluators_strategy,
     cv=hst.one_of(
         n_folds,
         hst.builds(LeaveOneOut),
@@ -530,7 +531,7 @@ def test_crossval_parallelism(estimator, X, y, evaluators, cv, n_jobs):
     estimator=estimator_strategy,
     X=X_strategy,
     y=y_strategy,
-    evaluators=evaluators_strategy,
+    evaluators=simple_evaluators_strategy,
     replications=hst.integers(
         min_value=1, max_value=10
     ),  # TODO: max_value should be increased when parallelising
@@ -540,7 +541,9 @@ def test_crossval_parallelism(estimator, X, y, evaluators, cv, n_jobs):
 def test_bootstrap_parallelism(
     estimator, X, y, evaluators, replications, use_group_cv, n_jobs
 ):
-    """Tests that n_jobs doesn't affect."""
+    """Tests that n_jobs doesn't affect output of bootstrapping."""
+
+    hyp.assume(np.all(np.isfinite(X)) and np.all(np.isfinite(y)))
     try:
         _test_invariance_to_n_jobs(
             bootstrap_model,
@@ -565,7 +568,7 @@ def test_bootstrap_parallelism(
     estimator=estimator_strategy,
     X=X_strategy,
     y=y_strategy,
-    evaluators=evaluators_strategy,
+    evaluators=simple_evaluators_strategy,
     replications=hst.integers(
         min_value=2, max_value=6
     ),  # TODO: max_value should be increased when parallelising
