@@ -100,7 +100,7 @@ def test_eval_function_calls(eval_func, make_simple_data):
 
     eval_results = eval_func(estimator=estimator, X=X, y=y, evaluators=evaluators)
 
-    assert all([eval.aggregate_call for (eval, _) in eval_results])
+    assert all([ev.aggregate_call for (ev, _) in eval_results])
 
 
 @pytest.mark.parametrize("eval_func", [bootcross_model, bootstrap_model])
@@ -111,7 +111,8 @@ def test_groups_input(eval_func, estimator, flag, make_simple_data):
 
     TODO: test that groupings are respected as intended.
 
-    Uses _MockGroupEstimator to test this observationally."""
+    Uses _MockGroupEstimator to test this observationally.
+    """
     estimator = _MockEstimator()
     evaluators = [_MockEvaluator()]
     X, y = make_simple_data
@@ -333,19 +334,19 @@ def _default_bootcross_data_strategy(**kwargs):
         hst.floats(min_value=1.0 / n, max_value=(n - 1.0) / n),
     )
 
-    default = dict(
-        estimator=estimator_strategy,
-        X=X_strategy,
-        y=y_strategy,
-        evaluators=simple_evaluators_strategy,
-        replications=hst.integers(
+    default = {
+        "estimator": estimator_strategy,
+        "X": X_strategy,
+        "y": y_strategy,
+        "evaluators": simple_evaluators_strategy,
+        "replications": hst.integers(
             min_value=1, max_value=5
         ),  # TODO: max_value should be increased when parallelising
-        test_size=test_size_strategy,
-        random_state=random_state_strategy,
-        use_group_cv=hst.booleans(),
-        n_jobs=hst.sampled_from([1]),
-    )
+        "test_size": test_size_strategy,
+        "random_state": random_state_strategy,
+        "use_group_cv": hst.booleans(),
+        "n_jobs": hst.sampled_from([1]),
+    }
     updated_default = default.copy()
     updated_default.update(kwargs)
     strat = hst.fixed_dictionaries(updated_default)
@@ -353,18 +354,18 @@ def _default_bootcross_data_strategy(**kwargs):
 
 
 def _default_bootstrap_data_strategy(**kwargs):
-    default = dict(
-        estimator=estimator_strategy,
-        X=X_strategy,
-        y=y_strategy,
-        evaluators=simple_evaluators_strategy,
-        replications=hst.integers(
+    default = {
+        "estimator": estimator_strategy,
+        "X": X_strategy,
+        "y": y_strategy,
+        "evaluators": simple_evaluators_strategy,
+        "replications": hst.integers(
             min_value=1, max_value=4
         ),  # TODO: max_value should be increased when parallelising
-        random_state=random_state_strategy,
-        use_group_cv=hst.sampled_from([False]),
-        n_jobs=hst.sampled_from([1])
-    )
+        "random_state": random_state_strategy,
+        "use_group_cv": hst.sampled_from([False]),
+        "n_jobs": hst.sampled_from([1])
+    }
     updated_default = default.copy()
     updated_default.update(kwargs)
     strat = hst.fixed_dictionaries(updated_default)
@@ -393,16 +394,16 @@ def _default_crossval_data_strategy(**kwargs):
     X_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[0])
     y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
 
-    default = dict(
-        estimator=estimator_strategy,
-        X=X_strategy_bounded,
-        y=y_strategy_bounded,
-        evaluators=simple_evaluators_strategy,
-        cv=hst.one_of(
+    default = {
+        "estimator": estimator_strategy,
+        "X": X_strategy_bounded,
+        "y": y_strategy_bounded,
+        "evaluators": simple_evaluators_strategy,
+        "cv": hst.one_of(
             # implicit KFold; number of folds
             n_folds,
-            # hst.builds(LeaveOneOut),
-            # hst.builds(TimeSeriesSplit, n_splits=n_folds),
+            hst.builds(LeaveOneOut),
+            hst.builds(TimeSeriesSplit, n_splits=n_folds),
             # hst.builds(KFold, n_splits=n_folds), # k_fold is created implicitly already
             # TODO: encode/document the dependence between n_folds and stratification groups
             #       as this breaks stratification
@@ -414,8 +415,8 @@ def _default_crossval_data_strategy(**kwargs):
             # TODO: None doesn't work if data has <5 rows
             # hst.none(),
         ),
-        random_state=random_state_strategy,
-        stratify=hst.one_of(
+        "random_state": random_state_strategy,
+        "stratify": hst.one_of(
             # TODO: None fails if we use a CV that expects stratification
             hst.none(),
             # arrays(
@@ -426,13 +427,14 @@ def _default_crossval_data_strategy(**kwargs):
             #     ),
             # ),
         ),
-        n_jobs=hst.sampled_from([1])
-    )
+        "n_jobs": hst.sampled_from([1])
+    }
     updated_default = default.copy()
     updated_default.update(kwargs)
     strat = hst.fixed_dictionaries(updated_default)
 
     return strat
+
 
 # Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
@@ -474,6 +476,7 @@ def _n_samples(draw: Callable, min_bound_strat: hst.SearchStrategy[int]) -> int:
     min_bound = draw(min_bound_strat)
     n_samples = draw(hst.integers(min_value=min_bound, max_value=20))
     return n_samples
+
 
 # Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
@@ -548,6 +551,7 @@ def test_bootstrap_parallelism(
     ),
 )
 def test_bootcross_parallelism(data):
+    """Test that n_jobs doesn't affect output of bootcrossing."""
     try:
         _test_invariance_to_n_jobs(
             bootcross_model,
