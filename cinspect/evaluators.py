@@ -59,7 +59,7 @@ class Evaluator:
 
         Parameters
         ----------
-        evaluation : Evaluation
+        evaluation:Evaluation
             The new internal evaluation.
         """
         self.evaluation = evaluation
@@ -76,9 +76,11 @@ class Evaluator:
         This could be a pandas dataframe, a matplotlib figure, etc.
         """
         evaluation = (
-            evaluation if evaluation is not None else getattr(self, "evaluation", None)
+            evaluation
+            if evaluation is not None
+            else (self.evaluation if hasattr(self, "evaluation") else None)
         )
-        return self.evaluation
+        return evaluation
 
 
 class ScoreEvaluator(Evaluator):
@@ -152,13 +154,13 @@ class BinaryTreatmentEffect(Evaluator):
 
         Parameters
         ----------
-        treatment_column : Union[str, int]
+        treatment_column:Union[str, int]
             Treatment variable's column index
-        treatment_val : Any, optional
+        treatment_val:Any, optional
             Value of treatment variable when "treated" , by default 1
-        control_val : Any, optional
+        control_val:Any, optional
             Value of treatment variable when "untreated", by default 0
-        evaluate_mode : str, optional
+        evaluate_mode:str, optional
             Evaluation mode; "train"/"test"/"all", by default "all"
         """
         self.treatment_column = treatment_column
@@ -206,7 +208,7 @@ class BinaryTreatmentEffect(Evaluator):
         """Aggregate a sequence of BTEEvaluations to a single BTEEvaluation."""
         return _flatten(evaluations)
 
-    def get_results(self, evaluation, ci_probs=(0.025, 0.975)):
+    def get_results(self, evaluation=None, ci_probs=(0.025, 0.975)):
         """Get the statistics of the ATE.
 
         Parameters
@@ -223,7 +225,7 @@ class BinaryTreatmentEffect(Evaluator):
             A sequence of confidence interval levels as specified by
             `ci_probs`.
         """
-        evaluation = self.super().get_results(evaluation)
+        evaluation = super().get_results(evaluation)
         for p in ci_probs:
             if p < 0 or p > 1:
                 raise ValueError("ci_probs must be in range [0, 1].")
@@ -338,7 +340,7 @@ class PartialDependanceEvaluator(Evaluator):
 
     def get_results(
         self,
-        evaluation: PDEvaluation,
+        evaluation: Optional[PDEvaluation] = None,
         mode="multiple-pd-lines",
         color="black",
         color_samples="grey",
@@ -351,16 +353,16 @@ class PartialDependanceEvaluator(Evaluator):
 
         Parameters
         ----------
-        evaluation : PDEvaluation
-        mode : str, optional
+        evaluation: PDEvaluation
+        mode: str, optional
             _description_, by default "multiple-pd-lines"
-        color : str, optional
+        color: str, optional
             _description_, by default "black"
-        color_samples : str, optional
+        color_samples: str, optional
             _description_, by default "grey"
-        pd_alpha : _type_, optional
+        pd_alpha: _type_, optional
             _description_, by default None
-        ci_bounds : tuple, optional
+        ci_bounds: tuple, optional
             _description_, by default (0.025, 0.975)
 
         Returns
@@ -376,7 +378,7 @@ class PartialDependanceEvaluator(Evaluator):
         RuntimeError
             Raised if a dependency is invalid.
         """
-        evaluation = self.super().get_results(evaluation)
+        evaluation = super().get_results(evaluation)
         figs, ress = {}, {}
         for dep_name, dep in self.dep_params.items():
             predictions = evaluation[dep_name]
@@ -572,14 +574,14 @@ class PermutationImportanceEvaluator(Evaluator):
         """Concatenate sequence of evaluations."""
         return _flatten(evaluations)
 
-    def get_results(self, evaluation, ntop=10, name=None) -> mpl.figure.Figure:
+    def get_results(self, evaluation=None, ntop=10, name=None) -> mpl.figure.Figure:
         """Get permutation importance plot.
 
         Parameters
         ----------
-        ntop : int, optional
+        ntop: int, optional
             Number of features to show on the plot, by default 10
-        name : str, optional
+        name: str, optional
             Name to place on plot, by default None
 
         Returns
@@ -587,7 +589,7 @@ class PermutationImportanceEvaluator(Evaluator):
         mpl.figure.Figure
             Permutation importance figure
         """
-        evaluation = self.super().get_results(evaluation)
+        evaluation = super().get_results(evaluation)
         samples = np.hstack(evaluation)
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"
