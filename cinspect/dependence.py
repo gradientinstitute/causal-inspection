@@ -3,7 +3,7 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -139,7 +139,7 @@ def construct_grid(
     grid_counts = None
     grid = None
 
-    if isinstance(grid_values, Union[List, Tuple, np.ndarray]):
+    if isinstance(grid_values, (List, Tuple, np.ndarray)):
         # check grid_values is not an array,
         # as np.array==str raises a futurewarning
         grid_values = np.asarray(grid_values)
