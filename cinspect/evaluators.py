@@ -255,7 +255,7 @@ class PartialDependanceEvaluator(Evaluator):
         displayed on plot to provide info about filter
     """
 
-    PDEvaluation = Dict[str, list[npt.ArrayLike]]
+    PDEvaluation = Dict[str, List[npt.ArrayLike]]
 
     def __init__(
         self,
