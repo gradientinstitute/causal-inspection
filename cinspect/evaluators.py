@@ -714,7 +714,9 @@ def _merge_dicts_of_lists_by_concatting(
 
     Not commutative (as list concatenation is not commutative), but not lossy.
 
-    >>> merged = _merge_dicts_of_lists_by_concatting({"k1": [1,2], "k2": [3]}, {"k1": [4], "k3": [5]})
+    >>> merged = _merge_dicts_of_lists_by_concatting(
+    ...     {"k1": [1,2], "k2": [3]},
+    ...     {"k1": [4], "k3": [5]})
     >>> merged == {"k1": [1,2,4], "k2": [3], "k3": [5]}
     True
     """
