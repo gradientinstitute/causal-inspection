@@ -156,7 +156,7 @@ def bootcross_model(
     bootcross_split_generator = (
         _bootcross_split(n, test_size, random_state) for _ in range(replications)
     )
-    evalutors_evaluations = _repeatedly_evaluate_model(
+    evaluators_evaluations = _repeatedly_evaluate_model(
         estimator=estimator,
         X=X,
         y=y,
@@ -167,9 +167,10 @@ def bootcross_model(
         name_for_logging="Bootstrap-cross",
         n_jobs=n_jobs,
     )
-    _set_evaluators_evaluations(evalutors_evaluations)
 
-    return evalutors_evaluations
+    _set_evaluators_evaluations(evaluators_evaluations)
+
+    return evaluators_evaluations
 
 
 def _check_group_estimator(estimator, use_group_cv):
@@ -245,6 +246,7 @@ def _repeatedly_evaluate_model(
         return evaluations
 
     LOG.info(f"{name_for_logging}...")
+    start = time.time()
     evaluations_per_iteration = joblib.Parallel(n_jobs=n_jobs)(
         joblib.delayed(eval_iter_f)(tr_tst_ix)
         for tr_tst_ix in train_test_indices_generator
@@ -257,13 +259,21 @@ def _repeatedly_evaluate_model(
         )
         for j in range(len(evaluators))
     ]
+    end = time.time()
     LOG.info(f"{name_for_logging} complete")
+    delta = end-start
+    time_per_it = delta/len(evaluations_per_iteration)
+    LOG.info(
+        f"Total {name_for_logging} time {delta:.2f}s:"
+        f"average {time_per_it:.2f}s per iteration"
+    )
 
     return list(zip(evaluators, evaluations_combined))
 
 
 def _set_evaluators_evaluations(evaluators_and_their_evaluations):
-    map(lambda tor, tion: tor.set_evaluation(tion), evaluators_and_their_evaluations)
+    for tor, tion in evaluators_and_their_evaluations:
+        tor.set_evaluation(tion)
 
 
 def _train_evaluate_model(
