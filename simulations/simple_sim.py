@@ -105,8 +105,9 @@ def main():
     # Casual estimation
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
     pieval = PermutationImportanceEvaluator(n_repeats=5)
-    bootcross_model(model, X, Y, [pdeval, pieval], replications=30,
-                    use_group_cv=True)  # To make sure we pass use GroupKFold
+    bootcross_model(
+        model, X, Y, [pdeval, pieval], replications=30, use_group_cv=True
+    )  # To make sure we pass use GroupKFold
 
     pdeval.get_results(mode="interval")
     pdeval.get_results(mode="derivative")

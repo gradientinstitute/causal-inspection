@@ -76,7 +76,7 @@ def bootstrap_model(
     evaluators: Sequence[Evaluator],
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    use_group_cv: bool = False
+    use_group_cv: bool = False,
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -133,7 +133,7 @@ def bootcross_model(
     replications: int = 100,
     test_size: Union[int, float] = 0.25,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    use_group_cv: bool = False
+    use_group_cv: bool = False,
 ) -> Sequence[Evaluator]:
     """
     Use bootstrapping to compute random train/test folds (no sample sharing).

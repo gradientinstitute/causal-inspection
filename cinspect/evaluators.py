@@ -238,7 +238,7 @@ class PartialDependanceEvaluator(Evaluator):
             # we use the X, y information only to select the values over which
             # to compute dependence and to plot the density/counts for each
             # feature.
-            transformer = clone(estimator[0:self.end_transform_indx])
+            transformer = clone(estimator[0 : self.end_transform_indx])
             X = transformer.fit_transform(X, y)
 
         if self.conditional_filter is not None:
@@ -247,9 +247,7 @@ class PartialDependanceEvaluator(Evaluator):
         dep_params = {}
         if self.feature_grids is not None:
             for feature_name, grid_values in self.feature_grids.items():
-                dep_params[feature_name] = _Dependance(
-                    X, feature_name, grid_values
-                )
+                dep_params[feature_name] = _Dependance(X, feature_name, grid_values)
         else:
             for feature_name in X.columns:
                 dep_params[feature_name] = _Dependance(X, feature_name)
@@ -262,9 +260,9 @@ class PartialDependanceEvaluator(Evaluator):
         This is called by a model evaluation function in model_evaluation.
         """
         if self.end_transform_indx is not None:
-            transformer = estimator[0:self.end_transform_indx]
+            transformer = estimator[0 : self.end_transform_indx]
             Xt = transformer.transform(X)
-            predictor = estimator[self.end_transform_indx:]
+            predictor = estimator[self.end_transform_indx :]
 
         else:
             predictor = estimator
@@ -350,7 +348,7 @@ class PartialDependanceEvaluator(Evaluator):
         return figs, ress
 
 
-class _Dependance():
+class _Dependance:
     """Simple tuple class to hold dependence parameters for PD evaluator."""
 
     def __init__(self, X, feature_name, grid_values="auto"):
@@ -437,7 +435,7 @@ class PermutationImportanceEvaluator(Evaluator):
         This is called by a model evaluation function in model_evaluation.
         """
         if self.end_transform_indx is not None:
-            transformer = clone(estimator[0:self.end_transform_indx])
+            transformer = clone(estimator[0 : self.end_transform_indx])
             X = transformer.fit_transform(X, y)
 
         if self.grouped:
@@ -474,9 +472,9 @@ class PermutationImportanceEvaluator(Evaluator):
         This is called by a model evaluation function in model_evaluation.
         """
         if self.end_transform_indx is not None:
-            transformer = estimator[0:self.end_transform_indx]
+            transformer = estimator[0 : self.end_transform_indx]
             Xt = transformer.transform(X)
-            predictor = estimator[self.end_transform_indx:]
+            predictor = estimator[self.end_transform_indx :]
 
         else:
             predictor = estimator
