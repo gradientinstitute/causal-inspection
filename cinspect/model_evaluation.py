@@ -33,7 +33,7 @@ def crossval_model(
     ] = None,  # defaults to KFold(n_splits=5)
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     stratify: Optional[Union[np.ndarray, pd.Series]] = None,
-    n_jobs=-1,
+    n_jobs=1,
 ) -> Sequence[Evaluator]:
     """
     Evaluate a model using cross validation.
@@ -74,7 +74,7 @@ def bootstrap_model(
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
-    n_jobs=-1,
+    n_jobs=1,
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -126,7 +126,7 @@ def bootcross_model(
     test_size: Union[int, float] = 0.25,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
-    n_jobs=-1,
+    n_jobs=1,
 ) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Use bootstrapping to compute random train/test folds (no sample sharing).
@@ -213,7 +213,7 @@ def _repeatedly_evaluate_model(
     evaluators: Sequence[Evaluator],
     use_group_cv: bool = False,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
-    n_jobs=-1,
+    n_jobs=1,
     name_for_logging: str = "Evaluation",
 ) -> Sequence[Tuple[Evaluator, Any]]:
     # Runs code that requires the full set of data to be available For example
