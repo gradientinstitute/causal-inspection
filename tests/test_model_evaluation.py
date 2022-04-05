@@ -56,7 +56,7 @@ class _MockGroupEstimator(_MockEstimator):
             return np.ones(y_shape)
         else:
             return np.zeros(y_shape)
-    
+
     def groups_called(self, prediction):
         groups_called = np.all(prediction == 1)
         groups_not_called = np.all(prediction == 0)
@@ -118,7 +118,9 @@ def test_groups_input(eval_func, estimator, flag, make_simple_data):
 
     evaluations = eval_func(estimator, X, y, evaluators, use_group_cv=flag)
     if isinstance(estimator, _MockGroupEstimator):
-        assert flag == estimator.groups_called(evaluations), "Groups not used as intended."
+        assert flag == estimator.groups_called(
+            evaluations
+        ), "Groups not used as intended."
 
 
 class _MockRandomEvaluator(Evaluator):
@@ -297,7 +299,12 @@ y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 
 dummy_evaluators_strategy = hst.lists(hst.builds(Evaluator), max_size=3)
-simple_evaluators_strategy=hst.lists(hst.builds(ScoreEvaluator, scorers=hst.lists(hst.sampled_from(["r2", "explained_variance"]),max_size=1)))
+simple_evaluators_strategy = hst.lists(
+    hst.builds(
+        ScoreEvaluator,
+        scorers=hst.lists(hst.sampled_from(["r2", "explained_variance"]), max_size=1),
+    )
+)
 random_state_strategy = hst.one_of(
     hst.none(),
     hst.integers(min_value=0, max_value=2**32 - 1),
@@ -310,36 +317,132 @@ small_random_state_strategy = hst.one_of(
 )
 
 
+def _default_bootcross_data_strategy(**kwargs):
+    # Data source strategy for each test
+    n = 10  # Number of rows. Setting this too high may make test generation prohibitively slow
+    Xy_strategy_shared_bc = hst.shared(
+        testing_strategies.Xy_pd(n_rows=n), key="Xy_pd_bc"
+    )
+
+    # derived strategies
+    X_strategy = Xy_strategy_shared_bc.map(lambda Xy: Xy[0])
+    y_strategy = Xy_strategy_shared_bc.map(lambda Xy: Xy[1])
+
+    test_size_strategy = hst.one_of(
+        hst.integers(min_value=1, max_value=n - 1),
+        hst.floats(min_value=1.0 / n, max_value=(n - 1.0) / n),
+    )
+
+    default = dict(
+        estimator=estimator_strategy,
+        X=X_strategy,
+        y=y_strategy,
+        evaluators=simple_evaluators_strategy,
+        replications=hst.integers(
+            min_value=1, max_value=5
+        ),  # TODO: max_value should be increased when parallelising
+        test_size=test_size_strategy,
+        random_state=random_state_strategy,
+        use_group_cv=hst.booleans(),
+        n_jobs=hst.sampled_from([1]),
+    )
+    updated_default = default.copy()
+    updated_default.update(kwargs)
+    strat = hst.fixed_dictionaries(updated_default)
+    return strat
+
+
+def _default_bootstrap_data_strategy(**kwargs):
+    default = dict(
+        estimator=estimator_strategy,
+        X=X_strategy,
+        y=y_strategy,
+        evaluators=simple_evaluators_strategy,
+        replications=hst.integers(
+            min_value=1, max_value=4
+        ),  # TODO: max_value should be increased when parallelising
+        random_state=random_state_strategy,
+        use_group_cv=hst.sampled_from([False]),
+        n_jobs=hst.sampled_from([1])
+    )
+    updated_default = default.copy()
+    updated_default.update(kwargs)
+    strat = hst.fixed_dictionaries(updated_default)
+
+    return strat
+
+
+def _default_crossval_data_strategy(**kwargs):
+
+    # many cross-val strategies depend on the number of folds;
+    # this must be shared between the strategies for each test
+    n_folds = hst.shared(hst.integers(min_value=2, max_value=5), key="n_folds")
+
+    n_rows = hst.shared(
+        # min n_rows = n_folds + 1 ; required by some folds
+        _n_samples(min_bound_strat=n_folds.map(lambda n: n + 1)),
+        key="n_rows",
+    )
+    # strategy for generating Xy data with a fixed number of rows
+    # (determined by known strategy n_rows)
+    Xy_strategy_shared_bounded = hst.shared(
+        testing_strategies.Xy_pd(n_rows=n_rows), key="Xy_pd_bounded"
+    )
+
+    # derived strategies
+    X_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[0])
+    y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
+
+    default = dict(
+        estimator=estimator_strategy,
+        X=X_strategy_bounded,
+        y=y_strategy_bounded,
+        evaluators=simple_evaluators_strategy,
+        cv=hst.one_of(
+            # implicit KFold; number of folds
+            n_folds,
+            # hst.builds(LeaveOneOut),
+            # hst.builds(TimeSeriesSplit, n_splits=n_folds),
+            # hst.builds(KFold, n_splits=n_folds), # k_fold is created implicitly already
+            # TODO: encode/document the dependence between n_folds and stratification groups
+            #       as this breaks stratification
+            #        hst.builds(StratifiedKFold, n_splits=n_folds),
+            # TODO: must pass groups (indices) parameter if we want to use grouping cvs
+            #        hst.builds(GroupKFold, n_splits=n_folds),
+            #        hst.builds(StratifiedGroupKFold, n_splits=n_folds),
+            #        hst.builds(LeaveOneGroupOut),
+            # TODO: None doesn't work if data has <5 rows
+            # hst.none(),
+        ),
+        random_state=random_state_strategy,
+        stratify=hst.one_of(
+            # TODO: None fails if we use a CV that expects stratification
+            hst.none(),
+            # arrays(
+            #     dtype=scalar_dtypes(),
+            #     # TODO: ad-hoc; an array with the same number of els as X/y have rows
+            #     shape=X_strategy_bounded.map(
+            #         lambda x: (x.shape[0],)
+            #     ),
+            # ),
+        ),
+        n_jobs=hst.sampled_from([1])
+    )
+    updated_default = default.copy()
+    updated_default.update(kwargs)
+    strat = hst.fixed_dictionaries(updated_default)
+
+    return strat
+
 # Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
-
-
 @given(
-    estimator=estimator_strategy,
-    X=X_strategy,
-    y=y_strategy,
-    evaluators=dummy_evaluators_strategy,
-    replications=hst.integers(
-        min_value=1, max_value=10
-    ),  # TODO: max_value should be increased when parallelising
-    random_state=small_random_state_strategy,
-    use_group_cv=hst.sampled_from([False]),
+    data=_default_bootstrap_data_strategy(evaluators=dummy_evaluators_strategy)
 )
-def test_fuzz_bootstrap_model(
-    estimator, X, y, evaluators, replications, random_state, use_group_cv
-):
+def test_fuzz_bootstrap_model(data):
     """Simple fuzz-testing to ensure that we can run bootstrap_model without exceptions."""
     try:
-        bootstrap_model(
-            estimator=estimator,
-            X=X,
-            y=y,
-            evaluators=evaluators,
-            replications=replications,
-            random_state=random_state,
-            use_group_cv=use_group_cv,
-            n_jobs=1,
-        )
+        bootstrap_model(**data)
     except ValueError as ve:
         # Discard value errors;
         # basically all overflows or similar due to random data generation
@@ -350,48 +453,11 @@ def test_fuzz_bootstrap_model(
 # ---------- Fuzz-test bootcross_model -------------
 
 
-# Data source strategy for each test
-n = 10  # Number of rows. Setting this too high may make test generation prohibitively slow
-Xy_strategy_shared_bc = hst.shared(testing_strategies.Xy_pd(n_rows=n), key="Xy_pd_bc")
-
-# derived strategies
-X_strategy = Xy_strategy_shared_bc.map(lambda Xy: Xy[0])
-y_strategy = Xy_strategy_shared_bc.map(lambda Xy: Xy[1])
-
-test_size_strategy = hst.one_of(
-    hst.integers(min_value=1, max_value=n - 1),
-    hst.floats(min_value=1.0 / n, max_value=(n - 1.0) / n),
-)
-
-
-@given(
-    estimator=estimator_strategy,
-    X=X_strategy,
-    y=y_strategy,
-    evaluators=dummy_evaluators_strategy,
-    replications=hst.integers(
-        min_value=1, max_value=5
-    ),  # TODO: max_value should be increased when parallelising
-    test_size=test_size_strategy,
-    random_state=small_random_state_strategy,
-    use_group_cv=hst.booleans(),
-)
-def test_fuzz_bootcross_model(
-    estimator, X, y, evaluators, replications, test_size, random_state, use_group_cv
-):
+@given(data=_default_bootcross_data_strategy(evaluators=dummy_evaluators_strategy))
+def test_fuzz_bootcross_model(data):
     """Simple fuzz-testing to ensure that we can run bootcross_model without exceptions."""
     try:
-        bootcross_model(
-            estimator=estimator,
-            X=X,
-            y=y,
-            evaluators=evaluators,
-            replications=replications,
-            test_size=test_size,
-            random_state=random_state,
-            use_group_cv=use_group_cv,
-            n_jobs=1,
-        )
+        bootcross_model(**data)
     except ValueError as ve:
         # Discard value errors;
         # basically all overflows or similar due to random data generation
@@ -409,79 +475,16 @@ def _n_samples(draw: Callable, min_bound_strat: hst.SearchStrategy[int]) -> int:
     n_samples = draw(hst.integers(min_value=min_bound, max_value=20))
     return n_samples
 
-
-# many cross-val strategies depend on the number of folds;
-# this must be shared between the strategies for each test
-n_folds = hst.shared(hst.integers(min_value=2, max_value=5), key="n_folds")
-
-n_rows = hst.shared(
-    # min n_rows = n_folds + 1 ; required by some folds
-    _n_samples(min_bound_strat=n_folds.map(lambda n: n + 1)),
-    key="n_rows",
-)
-# strategy for generating Xy data with a fixed number of rows
-# (determined by known strategy n_rows)
-Xy_strategy_shared_bounded = hst.shared(
-    testing_strategies.Xy_pd(n_rows=n_rows), key="Xy_pd_bounded"
-)
-
-# derived strategies
-X_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[0])
-y_strategy_bounded = Xy_strategy_shared_bounded.map(lambda Xy: Xy[1])
-
-
 # Some of this code was written by the `hypothesis.extra.ghostwriter` module
 # and is provided under the Creative Commons Zero public domain dedication.
-@given(
-    estimator=estimator_strategy,
-    X=X_strategy_bounded,
-    y=y_strategy_bounded,
-    evaluators=dummy_evaluators_strategy,
-    cv=hst.one_of(
-        # implicit KFold; number of folds
-        n_folds,
-        hst.builds(LeaveOneOut),
-        hst.builds(TimeSeriesSplit, n_splits=n_folds),
-        # hst.builds(KFold, n_splits=n_folds), # k_fold is created implicitly already
-        # TODO: encode/document the dependence between n_folds and stratification groups
-        #       as this breaks stratification
-        #        hst.builds(StratifiedKFold, n_splits=n_folds),
-        # TODO: must pass groups (indices) parameter if we want to use grouping cvs
-        #        hst.builds(GroupKFold, n_splits=n_folds),
-        #        hst.builds(StratifiedGroupKFold, n_splits=n_folds),
-        #        hst.builds(LeaveOneGroupOut),
-        # TODO: None doesn't work if data has <5 rows
-        # hst.none(),
-    ),
-    random_state=small_random_state_strategy,
-    stratify=hst.one_of(
-        # TODO: None fails if we use a CV that expects stratification
-        hst.none(),
-        # arrays(
-        #     dtype=scalar_dtypes(),
-        #     # TODO: ad-hoc; an array with the same number of els as X/y have rows
-        #     shape=X_strategy_bounded.map(
-        #         lambda x: (x.shape[0],)
-        #     ),
-        # ),
-    ),
-)
-def test_fuzz_crossval_model(estimator, X, y, evaluators, cv, random_state, stratify):
+@given(data=_default_crossval_data_strategy(evaluators=dummy_evaluators_strategy))
+def test_fuzz_crossval_model(data):
     """Simple fuzz-testing to ensure that we can run bootstrap_mode without exceptions.
 
     Single-threaded for the sake of timing
     """
     try:
-        crossval_model(
-            estimator=estimator,
-            X=X,
-            y=y,
-            evaluators=evaluators,
-            cv=cv,
-            random_state=random_state,
-            stratify=stratify,
-            n_jobs=1,
-        )
+        crossval_model(**data)
     except ValueError as ve:
         # Discard value errors;
         # basically all overflows or similar due to random data generation
@@ -494,30 +497,13 @@ def _test_invariance_to_n_jobs(fn, n_jobs=-1, *args, **kwargs):
 
 
 @hyp.settings(deadline=None)
-@given(
-    estimator=estimator_strategy,
-    X=X_strategy_bounded,
-    y=y_strategy_bounded,
-    evaluators=simple_evaluators_strategy,
-    cv=hst.one_of(
-        n_folds,
-        hst.builds(LeaveOneOut),
-        hst.builds(TimeSeriesSplit, n_splits=n_folds),
-    ),
-    n_jobs=hst.sampled_from([2]),
-)
-def test_crossval_parallelism(estimator, X, y, evaluators, cv, n_jobs):
+@given(data=_default_crossval_data_strategy(n_jobs=hst.sampled_from([2])))
+def test_crossval_parallelism(data):
     """Tests that n_jobs doesn't affect."""
     try:
         _test_invariance_to_n_jobs(
             crossval_model,
-            n_jobs=n_jobs,
-            estimator=estimator,
-            X=X,
-            y=y,
-            evaluators=evaluators,
-            cv=cv,
-            random_state=0,
+            **data
         )
     except ValueError as ve:
         # Discard value errors;
@@ -527,34 +513,24 @@ def test_crossval_parallelism(estimator, X, y, evaluators, cv, n_jobs):
 
 
 @hyp.settings(deadline=None)  # disable for multiprocessing
-@given(
-    estimator=estimator_strategy,
-    X=X_strategy,
-    y=y_strategy,
-    evaluators=simple_evaluators_strategy,
+@given(data=_default_bootstrap_data_strategy(
     replications=hst.integers(
         min_value=1, max_value=10
-    ),  # TODO: max_value should be increased when parallelising
-    use_group_cv=hst.booleans(),
-    n_jobs=hst.sampled_from([2]),
+    ),
+    n_jobs=hst.sampled_from([2])
+    )
 )
 def test_bootstrap_parallelism(
-    estimator, X, y, evaluators, replications, use_group_cv, n_jobs
+    data
 ):
     """Tests that n_jobs doesn't affect output of bootstrapping."""
-
+    X = data["X"]
+    y = data["y"]
     hyp.assume(np.all(np.isfinite(X)) and np.all(np.isfinite(y)))
     try:
         _test_invariance_to_n_jobs(
             bootstrap_model,
-            n_jobs=n_jobs,
-            estimator=estimator,
-            X=X,
-            y=y,
-            evaluators=evaluators,
-            replications=replications,
-            use_group_cv=use_group_cv,
-            random_state=0,
+            **data
         )
     except ValueError as ve:
         # Discard value errors;
@@ -565,31 +541,17 @@ def test_bootstrap_parallelism(
 
 @hyp.settings(deadline=None)  # disable for multiprocessing
 @given(
-    estimator=estimator_strategy,
-    X=X_strategy,
-    y=y_strategy,
-    evaluators=simple_evaluators_strategy,
-    replications=hst.integers(
-        min_value=2, max_value=6
-    ),  # TODO: max_value should be increased when parallelising
-    use_group_cv=hst.booleans(),
-    n_jobs=hst.sampled_from([2]),
+    data=_default_bootcross_data_strategy(
+        n_jobs=hst.sampled_from([2]),
+        random_state=hst.sampled_from([0]),
+        test_size=hst.sampled_from([0.4]),
+    ),
 )
-def test_bootcross_parallelism(
-    estimator, X, y, evaluators, replications, use_group_cv, n_jobs
-):
-
+def test_bootcross_parallelism(data):
     try:
-        bootcross_model(
-            estimator=estimator,
-            X=X,
-            y=y,
-            evaluators=evaluators,
-            replications=replications,
-            test_size=0.4,
-            random_state=0,
-            use_group_cv=use_group_cv,
-            n_jobs=n_jobs,
+        _test_invariance_to_n_jobs(
+            bootcross_model,
+            **data
         )
     except ValueError as ve:
         # Discard value errors;
