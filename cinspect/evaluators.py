@@ -2,13 +2,16 @@
 # Licensed under the Apache 2.0 License.
 """Result evaluator classes."""
 
+import functools
 import logging
+import operator
 from collections import defaultdict
-from typing import Any, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, TypeVar, Union
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
@@ -17,6 +20,8 @@ from sklearn.metrics import get_scorer
 from cinspect import dependence, importance
 
 LOG = logging.getLogger(__name__)
+
+Evaluation = TypeVar("Evaluation")
 
 
 class Evaluator:
@@ -29,27 +34,53 @@ class Evaluator:
         """
         pass
 
-    def evaluate(self, estimator, X, y=None):
+    def evaluate(self, estimator, X, y=None) -> Evaluation:
         """Evaluate the fitted estimator with test, training or all data.
+
+        Subclasses should ensure that this is a pure function.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    def aggregate(self):
+    def aggregate(self, evaluations: Sequence[Evaluation]) -> Evaluation:
         """Aggregate the evaluation results.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    def get_results(self):
-        """Get the results from the evaluator.
+    def set_evaluation(self, evaluation: Evaluation):
+        """Setter; sets this object's evaluation.
+
+        Subclasses should ensure that this and self.prepare(..)
+        are the only ways to modify internal state.
+
+
+        Parameters
+        ----------
+        evaluation:Evaluation
+            The new internal evaluation.
+        """
+        self.evaluation = evaluation
+
+    def get_results(
+        self, evaluation: Optional[Evaluation] = None, **kwargs
+    ) -> Optional[Any]:
+        """View the evaluator's results.
+
+        Default implementation returns the given evaluation/the stored evaluation.
+        but this may be overridden if there is a canonical representation of the results
+        that differs from the results' internal representation.
 
         This could be a pandas dataframe, a matplotlib figure, etc.
-        This is called by the end user explicitly.
         """
-        pass
+        evaluation = (
+            evaluation
+            if evaluation is not None
+            else (self.evaluation if hasattr(self, "evaluation") else None)
+        )
+        return evaluation
 
 
 class ScoreEvaluator(Evaluator):
@@ -83,21 +114,24 @@ class ScoreEvaluator(Evaluator):
 
         This is called by a model evaluation function in model_evaluation.
         """
+        scores = defaultdict(list)
         if self.groupby is not None:
             groups = X.groupby(self.groupby)
             for group_key, Xs in groups:
                 ys = y[Xs.index]
-                self.scores["group"].append(group_key)
+                scores["group"].append(group_key)
                 for s_name, s in self.scorers.items():
-                    self.scores[s_name].append(s(estimator, Xs, ys))
+                    scores[s_name].append(s(estimator, Xs, ys))
 
         else:
             for s_name, s in self.scorers.items():
-                self.scores[s_name].append(s(estimator, X, y))
+                scores[s_name].append(s(estimator, X, y))
+        return scores
 
-    def get_results(self):
+    def get_results(self, evaluation, **kwargs):
         """Get the scores of the estimator."""
-        dfscores = pd.DataFrame(self.scores)
+        evaluation = evaluation if evaluation is not None else self.evaluation
+        dfscores = pd.DataFrame(evaluation) if evaluation is not None else None
         return dfscores
 
 
@@ -106,6 +140,8 @@ class BinaryTreatmentEffect(Evaluator):
 
     NOTE: This assumes SUTVA holds.
     """
+
+    BTEEvaluation = List[float]
 
     def __init__(
         self,
@@ -118,19 +154,18 @@ class BinaryTreatmentEffect(Evaluator):
 
         Parameters
         ----------
-        treatment_column : Union[str, int]
+        treatment_column:Union[str, int]
             Treatment variable's column index
-        treatment_val : Any, optional
+        treatment_val:Any, optional
             Value of treatment variable when "treated" , by default 1
-        control_val : Any, optional
+        control_val:Any, optional
             Value of treatment variable when "untreated", by default 0
-        evaluate_mode : str, optional
+        evaluate_mode:str, optional
             Evaluation mode; "train"/"test"/"all", by default "all"
         """
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
         self.control_val = control_val
-        self.ate_samples = []
 
     def prepare(self, estimator, X, y, random_state=None):
         """Prepare the evaluator with model and data information.
@@ -148,8 +183,8 @@ class BinaryTreatmentEffect(Evaluator):
         # assert self.treatment_val in T
         # assert self.control_val in T
 
-    def evaluate(self, estimator, X, y=None):
-        """Estimate the binary treatment effect on input data.
+    def evaluate(self, estimator, X, y=None) -> BTEEvaluation:
+        """Estimate the binary treatment effect on input data. Returns a singleton list.
 
         This is called by a model evaluation function in model_evaluation.
         """
@@ -166,9 +201,14 @@ class BinaryTreatmentEffect(Evaluator):
 
         # ATE
         ate = np.mean(Ey_treated - Ey_control)
-        self.ate_samples.append(ate)
 
-    def get_results(self, ci_probs=(0.025, 0.975)):
+        return [ate]
+
+    def aggregate(self, evaluations: Sequence[BTEEvaluation]) -> BTEEvaluation:
+        """Aggregate a sequence of BTEEvaluations to a single BTEEvaluation."""
+        return _flatten(evaluations)
+
+    def get_results(self, evaluation=None, ci_probs=(0.025, 0.975)):
         """Get the statistics of the ATE.
 
         Parameters
@@ -185,11 +225,13 @@ class BinaryTreatmentEffect(Evaluator):
             A sequence of confidence interval levels as specified by
             `ci_probs`.
         """
+        evaluation = super().get_results(evaluation)
         for p in ci_probs:
             if p < 0 or p > 1:
                 raise ValueError("ci_probs must be in range [0, 1].")
-        mean_ate = np.mean(self.ate_samples)
-        ci_levels = mquantiles(self.ate_samples, ci_probs)
+        ate_samples = evaluation
+        mean_ate = np.mean(ate_samples)
+        ci_levels = mquantiles(ate_samples, ci_probs)
         return mean_ate, *ci_levels
 
 
@@ -214,6 +256,8 @@ class PartialDependanceEvaluator(Evaluator):
     filter_name: (optional) str
         displayed on plot to provide info about filter
     """
+
+    PDEvaluation = Dict[str, List[npt.ArrayLike]]
 
     def __init__(
         self,
@@ -271,6 +315,8 @@ class PartialDependanceEvaluator(Evaluator):
         if self.conditional_filter is not None:
             Xt = self.conditional_filter(Xt)
 
+        param_predictions = defaultdict(list)
+
         for feature_name, params in self.dep_params.items():
             if feature_name not in Xt.columns:
                 raise RuntimeError(f"{feature_name} not in X!")
@@ -281,10 +327,20 @@ class PartialDependanceEvaluator(Evaluator):
                 ice = dependence.individual_conditional_expectation(
                     predictor, Xt, feature_indx, grid
                 )
-                params.predictions.append(ice)
+                param_predictions[feature_name].append(ice)
+        return param_predictions
+
+    def aggregate(self, evaluations: Sequence[PDEvaluation]) -> PDEvaluation:
+        """Aggregate a sequence of PDEvaluations to a single PDEvaluation."""
+        param_predictions_dicts = evaluations
+        combined_predictions = functools.reduce(
+            _merge_dicts_of_lists_by_concatting, param_predictions_dicts
+        )
+        return combined_predictions
 
     def get_results(
         self,
+        evaluation: Optional[PDEvaluation] = None,
         mode="multiple-pd-lines",
         color="black",
         color_samples="grey",
@@ -297,15 +353,16 @@ class PartialDependanceEvaluator(Evaluator):
 
         Parameters
         ----------
-        mode : str, optional
+        evaluation: PDEvaluation
+        mode: str, optional
             _description_, by default "multiple-pd-lines"
-        color : str, optional
+        color: str, optional
             _description_, by default "black"
-        color_samples : str, optional
+        color_samples: str, optional
             _description_, by default "grey"
-        pd_alpha : _type_, optional
+        pd_alpha: _type_, optional
             _description_, by default None
-        ci_bounds : tuple, optional
+        ci_bounds: tuple, optional
             _description_, by default (0.025, 0.975)
 
         Returns
@@ -321,15 +378,17 @@ class PartialDependanceEvaluator(Evaluator):
         RuntimeError
             Raised if a dependency is invalid.
         """
+        evaluation = super().get_results(evaluation)
         figs, ress = {}, {}
-        for dep in self.dep_params.values():
+        for dep_name, dep in self.dep_params.items():
+            predictions = evaluation[dep_name]
             if dep.valid:
                 fname = dep.feature_name
                 if self.filter_name is not None:
                     fname = fname + f", filtered by: {self.filter_name}"
                 fig, res = dependence.plot_partial_dependence_with_uncertainty(
                     dep.grid,
-                    dep.predictions,
+                    predictions,
                     fname,
                     density=dep.density,
                     categorical=dep.categorical,
@@ -369,7 +428,6 @@ class _Dependance:
         self.grid = grid
         self.density = density
         self.categorical = categorical
-        self.predictions = []
 
 
 class PermutationImportanceEvaluator(Evaluator):
@@ -466,7 +524,7 @@ class PermutationImportanceEvaluator(Evaluator):
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
-    def evaluate(self, estimator, X, y):
+    def evaluate(self, estimator, X, y) -> List[np.ndarray]:
         """Evaluate the fitted estimator with input data.
 
         This is called by a model evaluation function in model_evaluation.
@@ -510,16 +568,20 @@ class PermutationImportanceEvaluator(Evaluator):
             grouped=self.grouped,
         )
 
-        self.imprt_samples.append(imprt.importances)
+        return [imprt.importances]
 
-    def get_results(self, ntop=10, name=None) -> mpl.figure.Figure:
+    def aggregate(self, evaluations: Sequence[List[np.ndarray]]) -> List[np.ndarray]:
+        """Concatenate sequence of evaluations."""
+        return _flatten(evaluations)
+
+    def get_results(self, evaluation=None, ntop=10, name=None) -> mpl.figure.Figure:
         """Get permutation importance plot.
 
         Parameters
         ----------
-        ntop : int, optional
+        ntop: int, optional
             Number of features to show on the plot, by default 10
-        name : str, optional
+        name: str, optional
             Name to place on plot, by default None
 
         Returns
@@ -527,7 +589,8 @@ class PermutationImportanceEvaluator(Evaluator):
         mpl.figure.Figure
             Permutation importance figure
         """
-        samples = np.hstack(self.imprt_samples)
+        evaluation = super().get_results(evaluation)
+        samples = np.hstack(evaluation)
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"
         fig = _plot_importance(
@@ -634,3 +697,33 @@ def _np_or_pd_fill_col(X, column, fill_val):
     else:
         X[:, column] = fill_val
     return X
+
+
+# "key-value" type variables
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+def _flatten(list_of_lists: Sequence[List[V]]) -> List[V]:
+    """Flatten list of lists by concatenation."""
+    return functools.reduce(operator.add, list_of_lists)
+
+
+def _merge_dicts_of_lists_by_concatting(
+    dict1: Dict[K, List[V]], dict2: Dict[K, List[V]]
+) -> Dict[K, List[V]]:
+    """Merge two dicts where values are lists, by concatenating the values of duplicate keys.
+
+    Not commutative (as list concatenation is not commutative), but not lossy.
+
+    >>> merged = _merge_dicts_of_lists_by_concatting(
+    ...     {"k1": [1,2], "k2": [3]},
+    ...     {"k1": [4], "k3": [5]})
+    >>> merged == {"k1": [1,2,4], "k2": [3], "k3": [5]}
+    True
+    """
+    merged_dict = {
+        k: dict1.get(k, []) + dict2.get(k, [])
+        for k in set(dict1.keys()).union(set(dict2.keys()))
+    }
+    return merged_dict

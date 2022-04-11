@@ -81,9 +81,10 @@ def test_linear_binary_ate(
         )
 
         ate_est.prepare(estimator, X=XT_train, y=Y_train)
-        ate_est.evaluate(estimator, X=XT_test, y=Y_test)
-        ate = ate_est.ate_samples[0]
-        return ate
+
+        ate = ate_est.evaluate(estimator, X=XT_test, y=Y_test)
+
+        return ate[0]
 
     bootstrap_indices = test_utils.draw_bootstrap_samples(
         np.arange(n_test_samples),

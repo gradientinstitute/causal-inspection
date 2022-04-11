@@ -36,7 +36,7 @@ def Xy_np(
         Passed in by hst.composite decorator to construct a composite strategy
     n_rows : Optional[Union[int, hst.SearchStrategy[int]]], optional
         Number of data rows. If strategy, draw from it. If None, draw from default
-        strategy; integer between 1 and 30. By default None
+        strategy; integer between 1 and 10. By default None
 
     Returns
     -------
@@ -44,14 +44,14 @@ def Xy_np(
         Input, output test data
     """
     if n_rows is None:
-        n_rows_ = draw(hst.integers(min_value=1, max_value=30))
+        n_rows_ = draw(hst.integers(min_value=1, max_value=10))
     elif not isinstance(n_rows, int):
         n_rows_ = draw(n_rows)
     else:
         n_rows_ = n_rows
 
     n_X_cols = draw(hst.integers(min_value=1, max_value=10))
-    n_y_cols = draw(hst.integers(min_value=1, max_value=10))
+    n_y_cols = draw(hst.integers(min_value=1, max_value=2))
 
     X_shape = (n_rows_, n_X_cols)
     y_shape = (n_rows_, n_y_cols)
@@ -92,14 +92,14 @@ def Xy_pd(
         Passed in by hst.composite decorator to construct a composite strategy
     n_rows : Optional[Union[int, hst.SearchStrategy[int]]], optional
         Number of data rows. If strategy, draw from it. If None, draw from default
-        strategy; integer between 1 and 30. By default None
+        strategy; integer between 1 and 10. By default None
 
     Returns
     -------
     (X, y) : Tuple[pd.DataFrame, pd.DataFrame]
         Input, output test data
     """
-    n_rows_ = hst.integers(min_value=1, max_value=30) if n_rows is None else n_rows
+    n_rows_ = hst.integers(min_value=1, max_value=10) if n_rows is None else n_rows
     X, y = draw(Xy_np(n_rows=n_rows_))
     X_pd = pd.DataFrame(X)
     y_pd = (

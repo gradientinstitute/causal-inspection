@@ -3,19 +3,20 @@
 """Causal model evaluation functions."""
 
 
-import time
-import logging
 import inspect
-import numpy as np
-import pandas as pd
-
+import logging
+import time
 from functools import singledispatch
-from typing import Union, Optional, Sequence
-from sklearn.model_selection import KFold
-from sklearn.utils import resample, check_random_state
+from typing import Any, Optional, Sequence, Tuple, Union
+
+import joblib
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
 from sklearn.base import BaseEstimator
-from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection import BaseCrossValidator, KFold
 from sklearn.model_selection._search import BaseSearchCV
+from sklearn.utils import check_random_state, resample
 
 from cinspect.evaluators import Evaluator
 
@@ -27,9 +28,12 @@ def crossval_model(
     X: pd.DataFrame,
     y: Union[pd.Series, pd.DataFrame],
     evaluators: Sequence[Evaluator],
-    cv: Optional[Union[int, BaseCrossValidator]] = None,
+    cv: Optional[
+        Union[int, BaseCrossValidator]
+    ] = None,  # defaults to KFold(n_splits=5)
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     stratify: Optional[Union[np.ndarray, pd.Series]] = None,
+    n_jobs=1,
 ) -> Sequence[Evaluator]:
     """
     Evaluate a model using cross validation.
@@ -39,34 +43,27 @@ def crossval_model(
     """
     # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
-    for ev in evaluators:
-        ev.prepare(estimator, X, y, random_state=random_state)
 
     cv = 5 if cv is None else cv
     if isinstance(cv, int):
         cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
-    LOG.info("Validating ...")
+    cross_val_split_generator = cv.split(X, stratify)
+    evalutors_evaluations = _repeatedly_evaluate_model(
+        estimator=estimator,
+        X=X,
+        y=y,
+        train_test_indices_generator=cross_val_split_generator,
+        evaluators=evaluators,
+        use_group_cv=False,
+        random_state=random_state,
+        name_for_logging="Cross validate",
+        n_jobs=n_jobs,
+    )
 
-    for i, (rind, sind) in enumerate(cv.split(X, stratify)):
-        LOG.info(f"Validation round {i + 1}")
-        start = time.time()
+    _set_evaluators_evaluations(evalutors_evaluations)
 
-        Xr, Xs = _split_data(X, rind, sind)
-        yr, ys = _split_data(y, rind, sind)
-        estimator.fit(Xr, yr)
-        for ev in evaluators:
-            ev.evaluate(estimator, Xs, ys)
-
-        end = time.time()
-        LOG.info(f"... iteration time {end - start:.2f}s")
-
-    LOG.info("Validation done.")
-
-    for ev in evaluators:
-        ev.aggregate()
-
-    return evaluators
+    return evalutors_evaluations
 
 
 def bootstrap_model(
@@ -77,6 +74,7 @@ def bootstrap_model(
     replications: int = 100,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
+    n_jobs=1,
 ) -> Sequence[Evaluator]:
     """
     Retrain a model using bootstrap re-sampling.
@@ -98,31 +96,25 @@ def bootstrap_model(
     # Run various checks and prepare the evaluators
     indices = np.arange(len(X))
     random_state = check_random_state(random_state)
-    groups = _check_group_estimator(estimator, use_group_cv)
-    for ev in evaluators:
-        ev.prepare(estimator, X, y, random_state=random_state)
 
-    LOG.info("Bootstrapping ...")
-
-    # Bootstrapping loop
-    for i in range(replications):
-        LOG.info(f"Bootstrap round {i + 1}")
-        start = time.time()
-
-        Xb, yb, indb = resample(X, y, indices, random_state=random_state)
-        estimator.fit(Xb, yb, groups=indb) if groups else estimator.fit(Xb, yb)
-        for ev in evaluators:
-            ev.evaluate(estimator, Xb, yb)
-
-        end = time.time()
-        LOG.info(f"... iteration time {end - start:.2f}s")
-
-    LOG.info("Bootstrapping done.")
-
-    for ev in evaluators:
-        ev.aggregate()
-
-    return evaluators
+    bootstrap_split_generator = (
+        # identical train, test sets
+        (split1 := resample(indices, random_state=random_state), split1)
+        for _ in range(replications)
+    )
+    evalutors_evaluations = _repeatedly_evaluate_model(
+        estimator=estimator,
+        X=X,
+        y=y,
+        train_test_indices_generator=bootstrap_split_generator,
+        evaluators=evaluators,
+        use_group_cv=use_group_cv,
+        random_state=random_state,
+        name_for_logging="Bootstrap",
+        n_jobs=n_jobs,
+    )
+    _set_evaluators_evaluations(evalutors_evaluations)
+    return evalutors_evaluations
 
 
 def bootcross_model(
@@ -134,7 +126,8 @@ def bootcross_model(
     test_size: Union[int, float] = 0.25,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
-) -> Sequence[Evaluator]:
+    n_jobs=1,
+) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Use bootstrapping to compute random train/test folds (no sample sharing).
 
@@ -150,6 +143,7 @@ def bootcross_model(
         `GroupKFold`. This stops the same sample appearing in both the test and
         training splits of any inner cross validation.
     """
+    random_state = check_random_state(random_state)
     n = len(X)
     if isinstance(test_size, float):
         if test_size <= 0 or test_size >= 1:
@@ -159,35 +153,24 @@ def bootcross_model(
         if test_size <= 0 or test_size >= n:
             raise ValueError("test_size must be within the size of X")
 
-    # Run various checks and prepare the evaluators
-    random_state = check_random_state(random_state)
-    groups = _check_group_estimator(estimator, use_group_cv)
-    for ev in evaluators:
-        ev.prepare(estimator, X, y, random_state=random_state)
+    bootcross_split_generator = (
+        _bootcross_split(n, test_size, random_state) for _ in range(replications)
+    )
+    evaluators_evaluations = _repeatedly_evaluate_model(
+        estimator=estimator,
+        X=X,
+        y=y,
+        train_test_indices_generator=bootcross_split_generator,
+        evaluators=evaluators,
+        use_group_cv=use_group_cv,
+        random_state=random_state,
+        name_for_logging="Bootstrap-cross",
+        n_jobs=n_jobs,
+    )
 
-    LOG.info("Bootstrap crossing...")
+    _set_evaluators_evaluations(evaluators_evaluations)
 
-    # Bootstrapping loop
-    for i in range(replications):
-        LOG.info(f"Bootstrap cross round {i + 1}")
-        start = time.time()
-
-        tri, tsi = _bootcross_split(n, test_size, random_state)
-        Xr, Xs = _split_data(X, tri, tsi)
-        yr, ys = _split_data(y, tri, tsi)
-        estimator.fit(Xr, yr, groups=tri) if groups else estimator.fit(Xr, yr)
-        for ev in evaluators:
-            ev.evaluate(estimator, Xs, ys)
-
-        end = time.time()
-        LOG.info(f"... iteration time {end - start:.2f}s")
-
-    LOG.info("Bootstrapping crossing done.")
-
-    for ev in evaluators:
-        ev.aggregate()
-
-    return evaluators
+    return evaluators_evaluations
 
 
 def _check_group_estimator(estimator, use_group_cv):
@@ -196,8 +179,9 @@ def _check_group_estimator(estimator, use_group_cv):
         spec = inspect.signature(estimator.fit)
         if "groups" not in spec.parameters:
             LOG.warning(
-                "`groups` parameter passed to bootstrap_model, but "
-                "estimator doesn't support groups. Fitting without groups."
+                "`use_group_cv` parameter passed to a `model_evaluation` procedure"
+                " (e.g. `bootstrap`), but estimator doesn't support groups."
+                " Fitting without groups."
             )
             return False
     elif isinstance(estimator, BaseSearchCV):
@@ -219,19 +203,151 @@ def _bootcross_split(data_size, test_size, random_state):
     return train_boot, test_boot
 
 
-@singledispatch
+# -- Bootstrapping/validation duplicate code --
+def _repeatedly_evaluate_model(
+    estimator: BaseEstimator,
+    X: pd.DataFrame,
+    y: Union[pd.DataFrame, pd.Series],
+    train_test_indices_generator: Sequence[
+        Tuple[npt.ArrayLike, npt.ArrayLike]  # train, test index arrays
+    ],
+    evaluators: Sequence[Evaluator],
+    use_group_cv: bool = False,
+    random_state: Optional[Union[int, np.random.RandomState]] = None,
+    n_jobs=1,
+    name_for_logging: str = "Evaluation",
+) -> Sequence[Tuple[Evaluator, Any]]:
+    # Runs code that requires the full set of data to be available For example
+    # to select the range over which partial dependence should be shown.
+
+    for ev in evaluators:
+        ev.prepare(estimator, X, y, random_state=random_state)
+
+    def eval_iter_f(train_test_indices_tuple):
+        r_ind, s_ind = train_test_indices_tuple
+        LOG.info(f"{name_for_logging}")  # round {i + 1}")
+        start = time.time()
+
+        evaluations = [
+            _train_evaluate_model(
+                estimator,
+                X,
+                y,
+                train_indices=r_ind,
+                test_indices=s_ind,
+                evaluator=ev,
+                use_group_cv=use_group_cv,
+            )
+            for ev in evaluators
+        ]
+
+        end = time.time()
+        LOG.info(f"... iteration time {end - start:.2f}s")
+        return evaluations
+
+    LOG.info(f"{name_for_logging}...")
+    start = time.time()
+    evaluations_per_iteration = joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(eval_iter_f)(tr_tst_ix)
+        for tr_tst_ix in train_test_indices_generator
+    )
+
+    # aggregate over iterations for each evaluator
+    evaluations_combined = [
+        evaluators[j].aggregate(
+            [iter_results[j] for iter_results in evaluations_per_iteration]
+        )
+        for j in range(len(evaluators))
+    ]
+    end = time.time()
+    LOG.info(f"{name_for_logging} complete")
+    delta = end-start
+    time_per_it = delta/len(evaluations_per_iteration)
+    LOG.info(
+        f"Total {name_for_logging} time {delta:.2f}s:"
+        f"average {time_per_it:.2f}s per iteration"
+    )
+
+    return list(zip(evaluators, evaluations_combined))
+
+
+def _set_evaluators_evaluations(evaluators_and_their_evaluations):
+    for tor, tion in evaluators_and_their_evaluations:
+        tor.set_evaluation(tion)
+
+
+def _train_evaluate_model(
+    estimator, X, y, train_indices, test_indices, evaluator, use_group_cv=False
+):
+    est = _train_model(
+        estimator=estimator,
+        X=X,
+        y=y,
+        train_indices=train_indices,
+        use_group_cv=use_group_cv,
+    )
+    evl = _evaluate_model(
+        estimator=est,  # trained estimator
+        X=X,
+        y=y,
+        test_indices=test_indices,
+        evaluator=evaluator,
+    )
+    return evl
+
+
+def _train_model(
+    estimator: BaseEstimator,  # mutated, returned
+    X: pd.DataFrame,
+    y: Union[pd.DataFrame, pd.Series],
+    train_indices: Sequence[int],
+    use_group_cv: bool = False,
+):
+    group = _check_group_estimator(estimator, use_group_cv)
+    X_train, y_train = _get_rows(X, train_indices), _get_rows(y, train_indices)
+    if group:
+        estimator.fit(X_train, y_train, groups=train_indices)
+    else:
+        estimator.fit(X_train, y_train)
+    return estimator  # mutated input
+
+
+def _evaluate_model(
+    estimator: BaseEstimator,
+    X: pd.DataFrame,
+    y: Union[pd.DataFrame, pd.Series],
+    evaluator: Evaluator,
+    test_indices: Sequence[int],
+):
+    evaluation = evaluator.evaluate(
+        estimator, _get_rows(X, test_indices), _get_rows(y, test_indices)
+    )
+    # breakpoint()
+    return evaluation
+
+
+# --- Data-splitting helpers ---
+
+
 def _split_data(data, train_ind, test_ind):
+    data_r, data_s = _get_rows(data, train_ind), _get_rows(data, test_ind)
+    return data_r, data_s
+
+
+# Dynamically dispatched row-getters
+@singledispatch
+def _get_rows(data, indices):
     raise TypeError(f"Array type {type(data)} not recognised.")
 
 
-@_split_data.register(np.ndarray)
-def _(data, train_ind, test_ind):
-    data_r, data_s = data[train_ind], data[test_ind]
-    return data_r, data_s
+@_get_rows.register(np.ndarray)
+def _(data, indices):
+    rows = data[indices]
+    return rows
 
 
-@_split_data.register(pd.DataFrame)
-@_split_data.register(pd.Series)
-def _(data, train_ind, test_ind):
-    data_r, data_s = data.iloc[train_ind], data.iloc[test_ind]
-    return data_r, data_s
+@_get_rows.register(pd.Series)
+@_get_rows.register(pd.DataFrame)
+def _(data, indices):
+    rows = data.iloc[indices]
+    return rows
