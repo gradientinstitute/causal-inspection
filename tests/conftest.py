@@ -23,7 +23,7 @@ def linear_causal_data():
     rnd = np.random.RandomState(42)
     z = rnd.normal(size=n)
     t = 0.2 * z + rnd.normal(scale=0.2, size=n)
-    y = alpha * t + beta * z + rnd.normal(scale=.1, size=n)
+    y = alpha * t + beta * z + rnd.normal(scale=0.1, size=n)
     X = np.vstack((t, z)).T
 
     return X, y, alpha

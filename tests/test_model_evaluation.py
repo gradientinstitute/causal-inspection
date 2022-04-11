@@ -9,8 +9,12 @@ import hypothesis.strategies as hst
 import numpy as np
 import pytest
 from cinspect.evaluators import Evaluator
-from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
-                                       bootstrap_model, crossval_model)
+from cinspect.model_evaluation import (
+    _bootcross_split,
+    bootcross_model,
+    bootstrap_model,
+    crossval_model,
+)
 from hypothesis import given
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
@@ -181,10 +185,11 @@ class _MockLinearEstimator(BaseEstimator):
 
 @test_utils.repeat_flaky_test(
     # replicate to reduce chance of false positive
-    n_repeats=10, n_allowed_failures=1
-    )
+    n_repeats=10,
+    n_allowed_failures=1,
+)
 def test_bootstrap_samples_from_eval_distribution(
-        make_simple_data, n_bootstraps=10, random_state=42
+    make_simple_data, n_bootstraps=10, random_state=42
 ):
     """Test that true mean is in 95%CI of bootstrap samples.
 
@@ -319,7 +324,7 @@ y_strategy = Xy_strategy_shared.map(lambda Xy: Xy[1])
 
 test_size_strategy = hst.one_of(
     hst.integers(min_value=1, max_value=n - 1),
-    hst.floats(min_value=1.0 / n, max_value=(n-1.0) / n),
+    hst.floats(min_value=1.0 / n, max_value=(n - 1.0) / n),
 )
 
 
