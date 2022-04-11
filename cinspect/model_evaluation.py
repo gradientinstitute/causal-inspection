@@ -98,7 +98,7 @@ def bootstrap_model(
     random_state = check_random_state(random_state)
 
     bootstrap_split_generator = (
-        # identical train, test sets TODO: should we be evaluating on the whole data set?
+        # identical train, test sets
         (split1 := resample(indices, random_state=random_state), split1)
         for _ in range(replications)
     )
@@ -305,7 +305,7 @@ def _train_model(
 ):
     group = _check_group_estimator(estimator, use_group_cv)
     X_train, y_train = _get_rows(X, train_indices), _get_rows(y, train_indices)
-    if group and "groups" in inspect.signature(estimator.fit).parameters.keys():
+    if group:
         estimator.fit(X_train, y_train, groups=train_indices)
     else:
         estimator.fit(X_train, y_train)
