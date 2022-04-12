@@ -9,7 +9,7 @@ import pandas as pd
 
 from multimethod import multimethod
 from scipy import linalg, stats
-from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.base import BaseEstimator, RegressorMixin, clone, check_X_y
 from sklearn.linear_model import BayesianRidge, LinearRegression
 from sklearn.utils.validation import check_is_fitted
 
@@ -77,7 +77,8 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
         TODO: complete docstring
         """
         super().fit(X, y, sample_weight)
-        n, d = X.shape
+        X, y = check_X_y(X, y)
+        n, d = len(X), len(self.coef_)
         self.dof_ = n - d
         shp = (d,) if np.isscalar(self._residues) else (d, len(self._residues))
         s2 = ((self._residues / self.dof_) * np.ones(shp)).T
@@ -96,7 +97,8 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
         TODO: complete docstring
         """
         super().fit(X, y, sample_weight)
-        n, d = X.shape
+        X, y = check_X_y(X, y)
+        n, d = len(X), len(self.coef_)
         self.dof_ = n - d  # NOTE: THIS IS AN UNDERESTIMATE
         self.coef_se_ = np.sqrt(self.sigma_.diagonal())
         # NOTE: THIS IS NOT USING THE PROPER POSTERIOR
