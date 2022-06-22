@@ -80,8 +80,9 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
         X, y = check_X_y(X, y)
         n, d = len(X), len(self.coef_)
         self.dof_ = n - d
-        shp = (d,) if np.isscalar(self._residues) else (d, len(self._residues))
-        s2 = ((self._residues / self.dof_) * np.ones(shp)).T
+        e2 = ((y - self.predict(X))**2).sum(axis=0)
+        shp = (d,) if np.isscalar(e2) else (d, len(e2))
+        s2 = ((e2 / self.dof_) * np.ones(shp)).T
         self.coef_se_ = np.sqrt(linalg.pinv(X.T @ X).diagonal() * s2)
         self.t_ = self.coef_ / self.coef_se_
         self.p_ = (1.0 - stats.t.cdf(np.abs(self.t_), df=self.dof_)) * 2
