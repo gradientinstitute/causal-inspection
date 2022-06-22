@@ -2,6 +2,7 @@
 # Licensed under the Apache 2.0 License.
 """Test the extra statistical functions."""
 import numpy as np
+import pandas as pd
 import pytest
 import test_utils
 from scipy.linalg import svd
@@ -54,6 +55,8 @@ def test_conditional_correlation_correctness(func, ccorr, corr):
     """Test the correctness of the conditional correlation computation."""
     X, Y = func()
     calc_ccorr = conditional_corrcoef(X, Y)
+    if (isinstance(calc_ccorr, pd.DataFrame)):
+        calc_ccorr = calc_ccorr.to_numpy()
     calc_corr = np.corrcoef(Y.T)
     assert np.allclose(np.diag(calc_corr), 1.)
     assert np.allclose(calc_ccorr[0, 1], ccorr, atol=0.05)
@@ -68,6 +71,8 @@ def test_inputs(ysize, xsize):
     X = np.random.randn(N, xsize)
 
     ccov = conditional_cov(X, Y)
+    if (isinstance(ccov, pd.DataFrame)):
+        ccov = ccov.to_numpy()
     if ysize > 1:
         assert ccov.shape == (ysize, ysize)
         _, s, _ = svd(ccov)

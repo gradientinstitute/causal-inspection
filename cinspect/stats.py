@@ -3,6 +3,7 @@
 """Extra statistical functions."""
 
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression
 
 
@@ -46,7 +47,7 @@ def conditional_cov(X, Y, estimator=None, bias=False, ddof=None):
 
     Returns
     -------
-    ndarray
+    ndarray, DataFrame
         a (d, d) symmetric positive definite matrix of the conditional
         covariance between the columns of Y, COV(Y|X).
     """
@@ -55,6 +56,10 @@ def conditional_cov(X, Y, estimator=None, bias=False, ddof=None):
     EY_X = estimator.fit(X, Y).predict(X)
     RY = Y - EY_X
     cov = np.cov(RY.T, bias=bias, ddof=ddof)  # equal E[(Y-E[Y|X])(Y-E[Y|X]).T]
+
+    if isinstance(Y, pd.DataFrame):
+        cov = _ndarray_to_df(cov, Y)
+
     return cov
 
 
@@ -78,11 +83,25 @@ def conditional_corrcoef(X, Y, estimator=None):
 
     Returns
     -------
-    ndarray
+    ndarray, DataFrame
         a (d, d) symmetric matrix of the conditional correlation between the
         columns of Y, CORR(Y|X).
     """
     cov = conditional_cov(X, Y, estimator)
     var = np.diag(cov)
     corr = cov / np.sqrt(np.outer(var, var))
+
+    if isinstance(Y, pd.DataFrame):
+        corr = _ndarray_to_df(corr, Y)
+
     return corr
+
+
+def _ndarray_to_df(ndarray, Y):
+    """ Turns an ndarray into a df with labels from Y"""
+    df = pd.DataFrame(ndarray)
+    if hasattr(Y, 'columns'):
+        columns = Y.columns
+        df.columns = columns
+        df.index = columns
+    return df
