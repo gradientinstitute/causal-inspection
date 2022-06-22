@@ -98,9 +98,9 @@ def conditional_corrcoef(X, Y, estimator=None):
 
 
 def _ndarray_to_df(ndarray, Y):
-    """ Turns an ndarray into a df with labels from Y"""
+    """Turn an ndarray into a df with labels from Y."""
     df = pd.DataFrame(ndarray)
-    if hasattr(Y, 'columns'):
+    if hasattr(Y, "columns"):
         columns = Y.columns
         df.columns = columns
         df.index = columns
