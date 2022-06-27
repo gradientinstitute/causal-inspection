@@ -12,7 +12,7 @@ from sklearn.utils import check_random_state, indexable, resample
 
 def draw_bootstrap_samples(
     values: npt.ArrayLike,
-    sample_size: Optional[npt._ShapeLike] = None,
+    sample_size: Optional[Sequence[int]] = None,
     n_repeats: Optional[int] = None,
     random_seed: Optional[Union[int, np.random.RandomState]] = None,
 ) -> Iterable[np.ndarray]:
@@ -23,7 +23,7 @@ def draw_bootstrap_samples(
     ----------
     values : npt.ArrayLike
         Values to bootstrap from
-    sample_size : Optional[npt._ShapeLike]
+    sample_size : Optional[Sequence[int]]
         Size/shape of batches. If None, defaults to values.shape[0]. By default None
     n_repeats : Optional[int]
         number of bootstrap batches to generate. If None, generate indefinitely. By default None
