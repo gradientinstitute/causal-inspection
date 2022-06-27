@@ -4,6 +4,8 @@
 import numpy as np
 import pandas as pd
 import pytest
+import random
+import string
 import test_utils
 from scipy.linalg import svd
 from cinspect.stats import conditional_cov, conditional_corrcoef
@@ -55,8 +57,6 @@ def test_conditional_correlation_correctness(func, ccorr, corr):
     """Test the correctness of the conditional correlation computation."""
     X, Y = func()
     calc_ccorr = conditional_corrcoef(X, Y)
-    if (isinstance(calc_ccorr, pd.DataFrame)):
-        calc_ccorr = calc_ccorr.to_numpy()
     calc_corr = np.corrcoef(Y.T)
     assert np.allclose(np.diag(calc_corr), 1.)
     assert np.allclose(calc_ccorr[0, 1], ccorr, atol=0.05)
@@ -71,9 +71,29 @@ def test_inputs(ysize, xsize):
     X = np.random.randn(N, xsize)
 
     ccov = conditional_cov(X, Y)
-    if (isinstance(ccov, pd.DataFrame)):
-        ccov = ccov.to_numpy()
+
     if ysize > 1:
+        assert ccov.shape == (ysize, ysize)
+        _, s, _ = svd(ccov)
+        assert all(s >= 0)  # test for PSD matrix
+    else:
+        assert ccov.shape == ()
+        assert ccov >= 0.
+
+
+@pytest.mark.parametrize("ysize", [1, 2, 10])
+@pytest.mark.parametrize("xsize", [1, 2, 10])
+def test_inputs_df(ysize, xsize):
+    """Test validity of covariance and correlation matrices."""
+    Y = np.random.randn(N, ysize)
+    X = np.random.randn(N, xsize)
+    df_cols = ["".join(random.sample(string.ascii_letters, 5)) for _ in range(0, ysize)]
+
+    Ydf = pd.DataFrame(Y, columns=df_cols)
+    ccov = conditional_cov(X, Ydf)
+
+    if ysize > 1:
+        assert(isinstance(ccov, pd.DataFrame))
         assert ccov.shape == (ysize, ysize)
         _, s, _ = svd(ccov)
         assert all(s >= 0)  # test for PSD matrix
