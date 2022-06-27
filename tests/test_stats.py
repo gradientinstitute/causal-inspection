@@ -2,7 +2,10 @@
 # Licensed under the Apache 2.0 License.
 """Test the extra statistical functions."""
 import numpy as np
+import pandas as pd
 import pytest
+import random
+import string
 import test_utils
 from scipy.linalg import svd
 from cinspect.stats import conditional_cov, conditional_corrcoef
@@ -68,7 +71,29 @@ def test_inputs(ysize, xsize):
     X = np.random.randn(N, xsize)
 
     ccov = conditional_cov(X, Y)
+
     if ysize > 1:
+        assert ccov.shape == (ysize, ysize)
+        _, s, _ = svd(ccov)
+        assert all(s >= 0)  # test for PSD matrix
+    else:
+        assert ccov.shape == ()
+        assert ccov >= 0.
+
+
+@pytest.mark.parametrize("ysize", [1, 2, 10])
+@pytest.mark.parametrize("xsize", [1, 2, 10])
+def test_inputs_df(ysize, xsize):
+    """Test validity of covariance and correlation matrices."""
+    Y = np.random.randn(N, ysize)
+    X = np.random.randn(N, xsize)
+    df_cols = ["".join(random.sample(string.ascii_letters, 5)) for _ in range(0, ysize)]
+
+    Ydf = pd.DataFrame(Y, columns=df_cols)
+    ccov = conditional_cov(X, Ydf)
+
+    if ysize > 1:
+        assert(isinstance(ccov, pd.DataFrame))
         assert ccov.shape == (ysize, ysize)
         _, s, _ = svd(ccov)
         assert all(s >= 0)  # test for PSD matrix
