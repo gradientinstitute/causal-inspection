@@ -57,7 +57,7 @@ def conditional_cov(X, Y, estimator=None, bias=False, ddof=None):
     RY = Y - EY_X
     cov = np.cov(RY.T, bias=bias, ddof=ddof)  # equal E[(Y-E[Y|X])(Y-E[Y|X]).T]
 
-    if isinstance(Y, pd.DataFrame) and Y.shape[1] > 1:
+    if isinstance(Y, pd.DataFrame) and not np.ndim(cov) == 0:
         cov = _ndarray_to_df(cov, Y)
 
     return cov
@@ -91,7 +91,7 @@ def conditional_corrcoef(X, Y, estimator=None):
     var = np.diag(cov)
     corr = cov / np.sqrt(np.outer(var, var))
 
-    if isinstance(Y, pd.DataFrame) and Y.shape[1] > 1:
+    if isinstance(Y, pd.DataFrame) and not np.ndim(corr) == 0:
         corr = _ndarray_to_df(corr, Y)
 
     return corr
