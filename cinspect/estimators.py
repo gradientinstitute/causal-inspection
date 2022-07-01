@@ -112,10 +112,14 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
     """A regression estimator for binary treatment.
 
     This is a wrapper class that creates two estimators, one for the treatment
-    cohort, and another for the control.
+    cohort, and another for the control. I.e. this implements a T-learner.
 
     The predictions of this class are a combination of these two regressors
     depending on the value of the treatment.
+
+    NOTE: This can be used in conjunction with the
+    `evaluators.BinaryTreatmentEffect` evaluator to obtain statistics of a
+    binary treatment.
 
     Parameters
     ----------
