@@ -172,15 +172,12 @@ class BinaryTreatmentEffect(Evaluator):
         This is called by a model evaluation function in model_evaluation.
         """
         T = X[self.treatment_column]
-        # TODO: these are important but fragile assumptions
-        # I think it would make more sense to make an assertion about the density of points
-        # in the *neighbourhood* of the values
-        if self.treatment_val not in T:
-            LOG.warning(f"Treatment value {self.treatment_val} not in treatment column")
-        if self.control_val not in T:
-            LOG.warning(f"Treatment value {self.control_val} not in treatment column")
-        # assert self.treatment_val in T
-        # assert self.control_val in T
+        if self.treatment_val not in set(T):
+            raise ValueError(f"Treatment value {self.treatment_val} not in "
+                             "treatment column")
+        if self.control_val not in set(T):
+            raise ValueError(f"Treatment value {self.control_val} not in "
+                             "treatment column")
 
     def evaluate(self, estimator, X, y=None) -> BTEEvaluation:
         """Estimate the binary treatment effect on input data. Returns a singleton list.
