@@ -148,7 +148,6 @@ class BinaryTreatmentEffect(Evaluator):
         treatment_column: Union[str, int],
         treatment_val: Any = 1,
         control_val: Any = 0,
-        evaluate_mode: str = "all",
     ):
         """Construct BTE estimator.
 
