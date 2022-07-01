@@ -12,16 +12,13 @@ from cinspect.estimators import BinaryTreatmentRegressor
 from cinspect.evaluators import BinaryTreatmentEffect
 from cinspect.model_evaluation import bootstrap_model, crossval_model
 from numpy.typing import ArrayLike
-from scipy.special import expit
 from sklearn.base import clone
 
 # from sklearn.base import clone # required if we add *best* ridge regressor back in
-from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.model_selection import GridSearchCV, RepeatedKFold, ShuffleSplit
-from sklearn.utils import check_random_state
 
-from simulations.datagen import DGPGraph
+from simulations.datagen import collinear_confounders
 
 # Logging
 LOG = logging.getLogger(__name__)
@@ -30,58 +27,6 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 TRUE_ATE = 0.3
-
-
-def data_generation(
-    true_ate=TRUE_ATE, confounder_dim=200, latent_dim=5, random_state=None
-):
-    """Specify the data generation process.
-
-    This is just a simple "triangle" model with linear relationships.
-    X: confounding factors
-    T: treatment
-    Y: outcome
-
-    Casual relationships are X->T, X->Y, T->Y.
-
-    This is for a *binary* treatment variable.
-
-    """
-    rng = check_random_state(random_state)
-    # Confounder latent distribution
-    mu_x = np.zeros(latent_dim)
-    A = rng.randn(latent_dim, latent_dim)
-    cov_x = A @ A.T / latent_dim
-
-    # Projection class
-    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0, random_state=random_state)
-    rbf.fit(rng.randn(2, latent_dim))
-
-    # Treatment properties
-    W_xt = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
-
-    # Target properties
-    std_y = 0.5
-    W_ty = true_ate  # true casual effect
-    W_xy = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
-
-    def fX(n):
-        Xo = rng.multivariate_normal(mean=mu_x, cov=cov_x, size=n)
-        X = rbf.transform(Xo)
-        return X
-
-    def fT(X, n):
-        pt = expit(X @ W_xt)
-        return rng.binomial(n=1, p=pt, size=n)
-
-    def fY(X, T, n):
-        return W_ty * T + X @ W_xy + std_y * rng.randn(n)
-
-    dgp = DGPGraph()
-    dgp.add_node("X", fX)
-    dgp.add_node("T", fT, parents=["X"])
-    dgp.add_node("Y", fY, parents=["X", "T"])
-    return dgp
 
 
 def make_data() -> Tuple[ArrayLike, ArrayLike]:
@@ -93,7 +38,7 @@ def make_data() -> Tuple[ArrayLike, ArrayLike]:
         (features, target)
     """
     n = 500
-    dgp = data_generation()
+    dgp = collinear_confounders(TRUE_ATE, binary_treatment=True)
 
     # Generate data for the scenario
     data = dgp.sample(n)

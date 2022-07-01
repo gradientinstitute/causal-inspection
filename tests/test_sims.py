@@ -3,7 +3,7 @@
 import numpy as np
 from hypothesis import given
 from hypothesis import strategies as st
-from simulations import collinear_sim, simple_sim
+from simulations.datagen import simple_triangle, collinear_confounders
 
 
 @st.composite
@@ -23,11 +23,17 @@ def test_simple_data_generation_deterministic(n_x, support_size, random_state):
 
     Samples from two DGPS constructed with same parameters.
     """
-    result = simple_sim.data_generation(
-        n_x=n_x, support_size=support_size, random_state=random_state
+    result = simple_triangle(
+        alpha=0.3,
+        n_x=n_x,
+        support_size=support_size,
+        random_state=random_state
     )
-    repeat = simple_sim.data_generation(
-        n_x=n_x, support_size=support_size, random_state=random_state
+    repeat = simple_triangle(
+        alpha=0.3,
+        n_x=n_x,
+        support_size=support_size,
+        random_state=random_state
     )
     # sample from the dgps and compare samples for equality
     X_res = result.sample(100)
@@ -50,12 +56,14 @@ def test_collinear_data_generation_deterministic(
 
     Samples from two DGPS constructed with same parameters.
     """
-    result = collinear_sim.data_generation(
+    result = collinear_confounders(
+        true_ate=0.3,
         confounder_dim=confounder_dim,
         latent_dim=latent_dim,
         random_state=random_state,
     )
-    repeat = collinear_sim.data_generation(
+    repeat = collinear_confounders(
+        true_ate=0.3,
         confounder_dim=confounder_dim,
         latent_dim=latent_dim,
         random_state=random_state,

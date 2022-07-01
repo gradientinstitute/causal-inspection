@@ -4,6 +4,9 @@
 
 import numpy as np
 import networkx as nx
+from scipy.special import expit
+from sklearn.kernel_approximation import RBFSampler
+from sklearn.utils import check_random_state
 
 
 def generate_sythetic_approximation(X: np.ndarray) -> np.ndarray:
@@ -220,3 +223,106 @@ class DGPGraph:
             cate = s1[outcome_node].mean() - s0[outcome_node].mean()
             result[i] = cate
         return result
+
+
+#
+#  Triangle Graphs
+#
+
+def simple_triangle(
+    alpha,
+    binary_treatment=False,
+    n_x=30,
+    support_size=5,
+    random_state=None
+):
+    """Make a simple triangle model.
+
+    This is just a simple "triangle" model with linear relationships.
+    X: confounding factors
+    T: treatment
+    Y: outcome
+
+    Casual relationships are X->T, X->Y, T->Y.
+
+    """
+    rng = check_random_state(random_state)
+    coefs_T = np.zeros(n_x)
+    coefs_T[0:support_size] = rng.normal(1, 1, size=support_size)
+
+    coefs_Y = np.zeros(n_x)
+    coefs_Y[0:support_size] = rng.uniform(0, 1, size=support_size)
+
+    def fX(n):
+        return rng.normal(0, 1, size=(n, n_x))
+
+    def fT(X, n):
+        if binary_treatment:
+            pt = expit(X @ coefs_T)
+            return rng.binomial(n=1, p=pt, size=n)
+        return X @ coefs_T + rng.uniform(-1, 1, size=n)
+
+    def fY(X, T, n):
+        return alpha * T + X @ coefs_Y + rng.uniform(-1, 1, size=n)
+
+    dgp = DGPGraph()
+    dgp.add_node("X", fX)
+    dgp.add_node("T", fT, parents=["X"])
+    dgp.add_node("Y", fY, parents=["X", "T"])
+    return dgp
+
+
+def collinear_confounders(
+    true_ate,
+    binary_treatment=False,
+    confounder_dim=200,
+    latent_dim=5,
+    random_state=None
+):
+    """Make a triangle model with many collinear confounding variables.
+
+    This is just a simple "triangle" model with linear relationships.
+    X: confounding factors
+    T: treatment
+    Y: outcome
+
+    Casual relationships are X->T, X->Y, T->Y.
+
+    """
+    rng = check_random_state(random_state)
+    # Confounder latent distribution
+    mu_x = np.zeros(latent_dim)
+    A = rng.randn(latent_dim, latent_dim)
+    cov_x = A @ A.T / latent_dim
+
+    # Projection class
+    rbf = RBFSampler(n_components=confounder_dim, gamma=1.0, random_state=random_state)
+    rbf.fit(rng.randn(2, latent_dim))
+
+    # Treatment properties
+    W_xt = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
+
+    # Target properties
+    std_y = 0.5
+    W_ty = true_ate  # true casual effect
+    W_xy = rng.randn(confounder_dim) / np.sqrt(confounder_dim)
+
+    def fX(n):
+        Xo = rng.multivariate_normal(mean=mu_x, cov=cov_x, size=n)
+        X = rbf.transform(Xo)
+        return X
+
+    def fT(X, n):
+        if binary_treatment:
+            pt = expit(X @ W_xt)
+            return rng.binomial(n=1, p=pt, size=n)
+        return X @ W_xt + rng.uniform(-1, 1, size=n)
+
+    def fY(X, T, n):
+        return W_ty * T + X @ W_xy + std_y * rng.randn(n)
+
+    dgp = DGPGraph()
+    dgp.add_node("X", fX)
+    dgp.add_node("T", fT, parents=["X"])
+    dgp.add_node("Y", fY, parents=["X", "T"])
+    return dgp

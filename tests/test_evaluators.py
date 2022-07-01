@@ -6,14 +6,9 @@ import numpy as np
 import pytest
 from cinspect import estimators
 from cinspect.evaluators import BinaryTreatmentEffect
-from simulations import simple_sim
+from simulations.datagen import simple_triangle
 
 import test_utils
-
-
-def test_evaluator_calls():
-    """Test the evaluator classes can be called correctly."""
-    pass
 
 
 @test_utils.repeat_flaky_test(
@@ -36,15 +31,16 @@ def test_linear_binary_ate(
     n_bootstrap_samples=2000,
     n_bootstrap_repeats=10,
 ):
-    """Numerical test that a linear model recovers a trivial ATE.
-
-    TODO: Currently only valid when X has no effect on Y outside of treatment
-    """
+    """Numerical test that a linear model recovers a trivial ATE."""
     estimator = estimators.LinearRegressionStat()
-    treatment_value = 1
-    control_value = 0
-    dgp = simple_sim.data_generation(
-        n_x=n_x, support_size=support_size, alpha=alpha, random_state=random_state
+    treatment_value = 1.
+    control_value = 0.
+    dgp = simple_triangle(
+        n_x=n_x,
+        support_size=support_size,
+        alpha=alpha,
+        random_state=random_state,
+        binary_treatment=True
     )
     training_data = dgp.sample(n_train_samples)
     testing_data = dgp.sample(n_test_samples)
@@ -57,9 +53,8 @@ def test_linear_binary_ate(
     )
 
     # assumes 1d treatment
-    assert (
-        len(training_data["T"].shape) == 1
-    ), "This test assumes that treatment is 1D, but treatment shape is {training_data['T'].shape}"
+    assert len(training_data["T"].shape) == 1, "This test assumes that "\
+        f"treatment is 1D, but treatment shape is {training_data['T'].shape}"
 
     def binary_ate(
         X_train,
@@ -103,14 +98,10 @@ def test_linear_binary_ate(
         Y_test=testing_data["Y"],
         T_test=testing_data["T"],
     )
-    # print(list(ate_bootstrapped))
 
-    # breakpoint()
     ate_cis = test_utils.confidence_intervals(
         ate_bootstrapped, quantiles=(0.0005, 0.9995)
     )
-    # breakpoint()
-    assert (
-        true_ate >= ate_cis[0] and true_ate <= ate_cis[1]
-    ), f"""True ATE {true_ate:.4f} not in estimated CIs {ate_cis};
-        if well-calibrated/specified, this should happen 0.1% of the time"""
+    assert true_ate >= ate_cis[0] and true_ate <= ate_cis[1], \
+        f"True ATE {true_ate:.4f} not in estimated CIs {ate_cis};" \
+        "if well-calibrated/specified, this should happen 0.1% of the time"

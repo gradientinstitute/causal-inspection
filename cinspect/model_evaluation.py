@@ -6,7 +6,6 @@
 import inspect
 import logging
 import time
-from functools import singledispatch
 from typing import Any, Optional, Sequence, Tuple, Union
 
 import joblib
@@ -19,6 +18,7 @@ from sklearn.model_selection._search import BaseSearchCV
 from sklearn.utils import check_random_state, resample
 
 from cinspect.evaluators import Evaluator
+from cinspect.utils import get_rows
 
 LOG = logging.getLogger(__name__)
 
@@ -304,7 +304,7 @@ def _train_model(
     use_group_cv: bool = False,
 ):
     group = _check_group_estimator(estimator, use_group_cv)
-    X_train, y_train = _get_rows(X, train_indices), _get_rows(y, train_indices)
+    X_train, y_train = get_rows(X, train_indices), get_rows(y, train_indices)
     if group:
         estimator.fit(X_train, y_train, groups=train_indices)
     else:
@@ -320,7 +320,7 @@ def _evaluate_model(
     test_indices: Sequence[int],
 ):
     evaluation = evaluator.evaluate(
-        estimator, _get_rows(X, test_indices), _get_rows(y, test_indices)
+        estimator, get_rows(X, test_indices), get_rows(y, test_indices)
     )
     # breakpoint()
     return evaluation
@@ -330,24 +330,5 @@ def _evaluate_model(
 
 
 def _split_data(data, train_ind, test_ind):
-    data_r, data_s = _get_rows(data, train_ind), _get_rows(data, test_ind)
+    data_r, data_s = get_rows(data, train_ind), get_rows(data, test_ind)
     return data_r, data_s
-
-
-# Dynamically dispatched row-getters
-@singledispatch
-def _get_rows(data, indices):
-    raise TypeError(f"Array type {type(data)} not recognised.")
-
-
-@_get_rows.register(np.ndarray)
-def _(data, indices):
-    rows = data[indices]
-    return rows
-
-
-@_get_rows.register(pd.Series)
-@_get_rows.register(pd.DataFrame)
-def _(data, indices):
-    rows = data.iloc[indices]
-    return rows

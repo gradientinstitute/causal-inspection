@@ -14,9 +14,8 @@ from cinspect.evaluators import (
 from cinspect.model_evaluation import bootcross_model
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV, GroupKFold
-from sklearn.utils import check_random_state
 
-from simulations.datagen import DGPGraph
+from simulations.datagen import simple_triangle
 
 # Logging
 LOG = logging.getLogger(__name__)
@@ -25,45 +24,9 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
 
-def data_generation(alpha=0.3, n_x=30, support_size=5, random_state=None):
-    """Specify the data generation process.
-
-    This is just a simple "triangle" model with linear relationships.
-    X: confounding factors
-    T: treatment
-    Y: outcome
-
-    Casual relationships are X->T, X->Y, T->Y.
-
-    This is for a *continuous* treatment variable.
-
-    """
-    rng = check_random_state(random_state)
-    coefs_T = np.zeros(n_x)
-    coefs_T[0:support_size] = rng.normal(1, 1, size=support_size)
-
-    coefs_Y = np.zeros(n_x)
-    coefs_Y[0:support_size] = rng.uniform(0, 1, size=support_size)
-
-    def fX(n):
-        return rng.normal(0, 1, size=(n, n_x))
-
-    def fT(X, n):
-        return X @ coefs_T + rng.uniform(-1, 1, size=n)
-
-    def fY(X, T, n):
-        return alpha * T + X @ coefs_Y + rng.uniform(-1, 1, size=n)
-
-    dgp = DGPGraph()
-    dgp.add_node("X", fX)
-    dgp.add_node("T", fT, parents=["X"])
-    dgp.add_node("Y", fY, parents=["X", "T"])
-    return dgp
-
-
 def main():
     """Run the simulation."""
-    dgp = data_generation()
+    dgp = simple_triangle(alpha=0.3)
 
     # Show the data generation graph
     dgp.draw_graph()

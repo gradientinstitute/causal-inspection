@@ -5,13 +5,13 @@
 from typing import NamedTuple, Union
 
 import numpy as np
-import pandas as pd
 
-from multimethod import multimethod
 from scipy import linalg, stats
 from sklearn.base import BaseEstimator, RegressorMixin, clone, check_X_y
 from sklearn.linear_model import BayesianRidge, LinearRegression
 from sklearn.utils.validation import check_is_fitted
+
+from cinspect.utils import get_column
 
 
 class RegressionStatisticalResults(NamedTuple):
@@ -167,8 +167,8 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         yt, yc = y[t_mask], y[c_mask]
 
         if groups is not None:
-            self.t_estimator_.fit(Xt, yt, groups[t_mask])
-            self.c_estimator_.fit(Xc, yc, groups[c_mask])
+            self.t_estimator_.fit(Xt, yt, groups=groups[t_mask])
+            self.c_estimator_.fit(Xc, yc, groups=groups[c_mask])
             return self
 
         self.t_estimator_.fit(Xt, yt)
@@ -204,23 +204,8 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
 
 def _treatment_split(X, t_col, t_val):
     """Split covariate data into treatment and control groups."""
-    T = _get_column(X, t_col)
+    T = get_column(X, t_col)
     t_mask = T == t_val
     Xt = X[t_mask]
     Xc = X[~t_mask]
     return Xt, Xc, t_mask
-
-
-@multimethod
-def _get_column(X: pd.DataFrame, col: str):  # noqa
-    return X[col]
-
-
-@multimethod
-def _get_column(X: pd.DataFrame, col: int):  # noqa
-    return X.iloc[:, col]
-
-
-@multimethod
-def _get_column(X: np.ndarray, col: int):  # noqa
-    return X[:, col]

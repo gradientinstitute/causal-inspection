@@ -282,6 +282,10 @@ def test_bootcross_split(random_state, test_size):
     # Make sure training and testing are not overlapping
     assert len(set(tri).intersection(set(tsi))) == 0
 
+    # Make sure we aren't getting repeated draws
+    tri2, tsi2 = _bootcross_split(N, test_size, random_state)
+    assert any(tri != tri2) and any(tsi != tsi2)
+
 
 # ---------- Fuzz-test bootstrap_model -------------
 

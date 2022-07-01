@@ -18,6 +18,7 @@ from sklearn.base import clone
 from sklearn.metrics import get_scorer
 
 from cinspect import dependence, importance
+from cinspect.utils import get_column
 
 LOG = logging.getLogger(__name__)
 
@@ -171,11 +172,12 @@ class BinaryTreatmentEffect(Evaluator):
 
         This is called by a model evaluation function in model_evaluation.
         """
-        T = X[self.treatment_column]
-        if self.treatment_val not in set(T):
+        setT = set(get_column(X, self.treatment_column))
+
+        if self.treatment_val not in setT:
             raise ValueError(f"Treatment value {self.treatment_val} not in "
                              "treatment column")
-        if self.control_val not in set(T):
+        if self.control_val not in setT:
             raise ValueError(f"Treatment value {self.control_val} not in "
                              "treatment column")
 
