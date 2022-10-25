@@ -72,6 +72,8 @@ def bootstrap_model(
     y: Union[pd.DataFrame, pd.Series],
     evaluators: Sequence[Evaluator],
     replications: int = 100,
+    subsample: float = 1.0,
+    stratify: Optional[Union[pd.Series, np.ndarray]] = None,
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
     n_jobs=1,
@@ -94,12 +96,20 @@ def bootstrap_model(
         training splits of any inner cross validation.
     """
     # Run various checks and prepare the evaluators
-    indices = np.arange(len(X))
+    n = len(X)
+    indices = np.arange(n)
     random_state = check_random_state(random_state)
+    n_samples = round(subsample * n)
 
     bootstrap_split_generator = (
         # identical train, test sets
-        (split1 := resample(indices, random_state=random_state), split1)
+        (split1 := resample(
+            indices,
+            n_samples=n_samples,
+            random_state=random_state,
+            stratify=stratify
+            ),
+         split1)
         for _ in range(replications)
     )
     evalutors_evaluations = _repeatedly_evaluate_model(

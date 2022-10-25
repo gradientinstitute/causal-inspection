@@ -35,7 +35,7 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
     d = {}
     for j, c in enumerate(columns):
         ctype = types[c]
-        d[c] = X[:, j].astype(ctype)
+        d[c] = pd.Series(X[:, j]).astype(ctype)
     return pd.DataFrame(d)
 
 
@@ -89,7 +89,7 @@ def individual_conditional_expectation(
     input_df = False  # track if the predictor is expecting a dataframe
     if hasattr(X, "columns"):  # pandas DataFrame
         df_columns = X.columns
-        df_types = X.dtypes
+        df_types = {n: x.dtype for n, x in X.items()}
         X = X.values
         input_df = True
     elif not isinstance(feature, numbers.Integral):
@@ -147,7 +147,7 @@ def construct_grid(
         return grid_values, None
     else:
         if grid_values == "auto":  # here I also need to check type of column
-            if np.issubdtype(v.dtype, np.number):
+            if np.issubdtype(v.dtype.base, np.number):
                 nunique = len(np.unique(v))
                 if nunique > auto_threshold:
                     grid_values = 20
@@ -218,7 +218,7 @@ def plot_partial_dependence_with_uncertainty(
     feature_name,
     categorical=True,
     density=None,
-    name="",
+    name=None,
     mode="multiple-pd-lines",
     ax=None,
     color="black",
@@ -297,8 +297,13 @@ def plot_partial_dependence_with_uncertainty(
     else:
         x = grid
 
-    ax.set_ylabel("prediction")
-    ax.set_title(f"{name} Partial Dependence: {feature_name}")
+    ylabel = "Prediction"
+    title = f"Partial Dependence: {feature_name}"
+    if name is not None:
+        ylabel = f"{ylabel} of {name}"
+        title = f"{name} {title}"
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
     ax.grid(True)
     if ax.get_xlabel() is None:
         ax.set_xlabel(feature_name)
@@ -322,14 +327,15 @@ def plot_partial_dependence_with_uncertainty(
         do_derivative = mode == "derivative"
         mu, l, u = _pd_interval(predictions, x, do_derivative, ci_bounds)
         llabel = "mean"
-        ylabel = "prediction"
         if do_derivative:
-            ax.set_title(f"{name} Derivative Partial Dependence: {feature_name}")
+            dtitle = f"Derivative Partial Dependence: {feature_name}"
+            if name is not None:
+                title = f"{name} {dtitle}"
+            ax.set_title(dtitle)
             llabel += " derivative"
             ylabel = "$\\Delta $" + ylabel
         ax.fill_between(x, l, u, alpha=alpha, label=f"CI: {ci_bounds}")
         ax.plot(x, mu, label=llabel)
-        ax.set_xlabel(f"{feature_name}")
         ax.set_ylabel(ylabel)
         ax.legend()
         res = {"mean": mu, "lower": l, "upper": u}

@@ -70,9 +70,10 @@ class Evaluator:
     ) -> Optional[Any]:
         """View the evaluator's results.
 
-        Default implementation returns the given evaluation/the stored evaluation.
-        but this may be overridden if there is a canonical representation of the results
-        that differs from the results' internal representation.
+        Default implementation returns the given evaluation/the stored
+        evaluation. but this may be overridden if there is a canonical
+        representation of the results that differs from the results' internal
+        representation.
 
         This could be a pandas dataframe, a matplotlib figure, etc.
         """
@@ -249,10 +250,7 @@ class PartialDependanceEvaluator(Evaluator):
         If set, dependence will only be computed for specified features.
 
     conditional_filter: (optional) callable
-        Used to filter X before computing dependence
-
-    filter_name: (optional) str
-        displayed on plot to provide info about filter
+        Used to filter X and y before computing dependence
     """
 
     PDEvaluation = Dict[str, List[npt.ArrayLike]]
@@ -261,7 +259,6 @@ class PartialDependanceEvaluator(Evaluator):
         self,
         feature_grids=None,
         conditional_filter=None,
-        filter_name=None,
         end_transform_indx=None,
     ):
         """Construct a PartialDependanceEvaluator."""
@@ -284,7 +281,7 @@ class PartialDependanceEvaluator(Evaluator):
             X = transformer.fit_transform(X, y)
 
         if self.conditional_filter is not None:
-            X = self.conditional_filter(X)
+            X, y = self.conditional_filter(X, y)
 
         dep_params = {}
         if self.feature_grids is not None:
@@ -303,7 +300,7 @@ class PartialDependanceEvaluator(Evaluator):
         """
         if self.end_transform_indx is not None:
             transformer = estimator[0 : self.end_transform_indx]
-            Xt = transformer.transform(X)
+            Xt, y = transformer.transform(X, y)
             predictor = estimator[self.end_transform_indx :]
 
         else:
@@ -311,7 +308,7 @@ class PartialDependanceEvaluator(Evaluator):
             Xt = X
 
         if self.conditional_filter is not None:
-            Xt = self.conditional_filter(Xt)
+            Xt, y = self.conditional_filter(Xt, y)
 
         param_predictions = defaultdict(list)
 
@@ -344,6 +341,8 @@ class PartialDependanceEvaluator(Evaluator):
         color_samples="grey",
         pd_alpha=0.3,
         ci_bounds=(0.025, 0.975),
+        tname=None,
+        yname=None
     ) -> Sequence[mpl.figure.Figure]:
         """Get list of PD plots.
 
@@ -362,6 +361,8 @@ class PartialDependanceEvaluator(Evaluator):
             _description_, by default None
         ci_bounds: tuple, optional
             _description_, by default (0.025, 0.975)
+        name: str, optional
+            a name to prepend to the PD plot titles
 
         Returns
         -------
@@ -382,8 +383,8 @@ class PartialDependanceEvaluator(Evaluator):
             predictions = evaluation[dep_name]
             if dep.valid:
                 fname = dep.feature_name
-                if self.filter_name is not None:
-                    fname = fname + f", filtered by: {self.filter_name}"
+                if name is not None:
+                    fname = name + " " + fname
                 fig, res = dependence.plot_partial_dependence_with_uncertainty(
                     dep.grid,
                     predictions,
@@ -395,6 +396,7 @@ class PartialDependanceEvaluator(Evaluator):
                     color_samples=color_samples,
                     alpha=pd_alpha,
                     ci_bounds=ci_bounds,
+                    name=yname
                 )
                 figs[fname] = fig
                 ress[fname] = res
@@ -452,6 +454,9 @@ class PermutationImportanceEvaluator(Evaluator):
     grouped: bool (default=False)
         Should features be permuted together as groups. If True, features must
         be passed as a dictionary.
+
+    conditional_filter: (optional) callable
+        Used to filter X and y before computing importance
     """
 
     def __init__(
@@ -461,6 +466,7 @@ class PermutationImportanceEvaluator(Evaluator):
         end_transform_indx=None,
         grouped=False,
         scorer=None,
+        conditional_filter=None
     ):
         """Construct a permutation importance evaluator."""
         if not grouped and hasattr(features, "values"):  # flatten the dict
@@ -484,6 +490,7 @@ class PermutationImportanceEvaluator(Evaluator):
         self.end_transform_indx = end_transform_indx
         self.grouped = grouped
         self.scorer = scorer
+        self.conditional_filter = conditional_filter
 
     def prepare(self, estimator, X, y=None, random_state=None):
         """Prepare the evaluator with model and data information.
@@ -493,6 +500,9 @@ class PermutationImportanceEvaluator(Evaluator):
         if self.end_transform_indx is not None:
             transformer = clone(estimator[0 : self.end_transform_indx])
             X = transformer.fit_transform(X, y)
+
+        if self.conditional_filter is not None:
+            X, y = self.conditional_filter(X, y)
 
         if self.grouped:
             self.columns = list(self.features.keys())
@@ -535,6 +545,9 @@ class PermutationImportanceEvaluator(Evaluator):
         else:
             predictor = estimator
             Xt = X
+
+        if self.conditional_filter is not None:
+            Xt, y = self.conditional_filter(Xt, y)
 
         # we will get the indices by name - it is ok if the shape of the data
         # has changed, provided all the columns we want exist.
