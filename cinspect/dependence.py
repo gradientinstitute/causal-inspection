@@ -205,11 +205,12 @@ def plot_partial_dependence_density(
         ax.set_ylabel("counts")
 
     else:
-        ax.hist(density, color=color, alpha=alpha)
+        density, grid = ax.hist(density, color=color, alpha=alpha)
         ax.set_ylabel("counts")
 
     # set the main axis on which partial dependence is plotted
     ax.set_xlabel(feature_name)
+    return grid, density
 
 
 def plot_partial_dependence_with_uncertainty(
@@ -262,6 +263,7 @@ def plot_partial_dependence_with_uncertainty(
             interval - "mean" and "lower" and "upper" confidence intervals
             ice-mu-sd - "mean" and the "std" of the ICE plots
     """
+    res = {}
     fig = None
     if ax is not None:
         if density is not None:
@@ -276,7 +278,7 @@ def plot_partial_dependence_with_uncertainty(
             )
 
             # plot the distribution for of the variable on the second axis
-            plot_partial_dependence_density(
+            dbins, dcounts = plot_partial_dependence_density(
                 axes[1],
                 grid,
                 density,
@@ -285,6 +287,7 @@ def plot_partial_dependence_with_uncertainty(
                 color_samples,
             )
             ax = axes[0]
+            res |= {"dbins": dbins, "dcounts": dcounts}
         else:
             fig, ax = plt.subplots(1, 1, figsize=(12, 6))
 
@@ -313,7 +316,7 @@ def plot_partial_dependence_with_uncertainty(
         ax.plot(x, pds.T, color=color_samples, alpha=alpha)
         mean_pd = pds.mean(axis=0)
         ax.plot(x, mean_pd, color=color, linestyle="--", label=label)
-        res = {"mean": mean_pd, "samples": pds}
+        res |= {"mean": mean_pd, "samples": pds}
 
     elif mode == "ice-mu-sd":
         p_all = np.vstack(predictions)
@@ -321,7 +324,7 @@ def plot_partial_dependence_with_uncertainty(
         s = p_all.std(axis=0)
         ax.fill_between(x, mu - s, mu + s, alpha=alpha)
         ax.plot(x, mu)
-        res = {"mean": mu, "std": s}
+        res |= {"mean": mu, "std": s}
 
     elif mode == "derivative" or mode == "interval":
         do_derivative = mode == "derivative"
@@ -338,7 +341,7 @@ def plot_partial_dependence_with_uncertainty(
         ax.plot(x, mu, label=llabel)
         ax.set_ylabel(ylabel)
         ax.legend()
-        res = {"mean": mu, "lower": l, "upper": u}
+        res |= {"mean": mu, "lower": l, "upper": u}
 
     else:
         valid_modes = ["multiple-pd-lines", "ice-mu-sd", "derivative", "interval"]

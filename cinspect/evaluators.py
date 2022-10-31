@@ -604,10 +604,10 @@ class PermutationImportanceEvaluator(Evaluator):
         samples = np.hstack(evaluation)
         name = name + " " if name is not None else ""
         title = f"{name}Permutation Importance"
-        fig = _plot_importance(
+        fig, res = _plot_importance(
             samples, ntop, self.columns, title, xlabel="Permutation Importance"
         )
-        return fig
+        return fig, res
 
 
 def _get_column_indices_and_names(X, columns=None):
@@ -659,22 +659,25 @@ def _get_column_indices_and_names(X, columns=None):
 
 def _plot_importance(imprt_samples, topn, columns, title, xlabel=None):
 
-    # Get topn important features on average
-    imprt_mean = np.mean(imprt_samples, axis=1)
+    # Get topn important features using the median
+    imprt_med = np.median(imprt_samples, axis=1)
     if topn < 1:
-        topn = len(imprt_mean)
+        topn = len(imprt_med)
     # abs so it applies to both directional importances (coefficients) and
     # positive importances
-    order = np.abs(imprt_mean).argsort()[-topn:]
+    order = np.abs(imprt_med).argsort()[-topn:]
 
     # Plot summaries - top n important features
+    ordered_imprt_samples = imprt_samples[order]
+    labels = np.array(columns)[order]
     fig, ax = plt.subplots(figsize=(15, 10))
-    ax.boxplot(imprt_samples[order].T, vert=False, labels=np.array(columns)[order])
+    ax.boxplot(ordered_imprt_samples.T, vert=False, labels=labels)
     ax.set_title(f"{title} - top {topn}")
     if xlabel is not None:
         ax.set_xlabel(xlabel)
+    res = dict(zip(labels, ordered_imprt_samples))
 
-    return fig
+    return fig, res
 
 
 # TODO: these are prime candidates for single dispatch
