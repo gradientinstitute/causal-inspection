@@ -64,7 +64,6 @@ setup(
     extras_require={
         "dev": [
             "pytest",
-            "pytest-flake8",
             "pytest-mock",
             "flake8-bugbear",
             "flake8-builtins",

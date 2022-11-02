@@ -20,7 +20,7 @@ typecheck:
 	mypy ./cinspect
 
 lint:
-	py.test --flake8 ./cinspect -p no:regtest --cache-clear
+	flake8 ./cinspect
 
 isort:
 	isort .
