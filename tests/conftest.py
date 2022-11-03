@@ -2,6 +2,7 @@
 # Licensed under the Apache 2.0 License.
 """Test fixtures."""
 import os
+from datetime import timedelta
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,7 +10,7 @@ from hypothesis import settings, Verbosity
 
 
 # register test flags for hypothesis; allows e.g. extended deadlines on CI
-settings.register_profile("ci", deadline=milliseconds(1000))
+settings.register_profile("ci", deadline=timedelta(milliseconds=1000))
 settings.register_profile("dev", max_examples=10)
 settings.register_profile("debug", max_examples=10, verbosity=Verbosity.verbose)
 settings.load_profile(os.getenv(u"HYPOTHESIS_PROFILE", "default"))
