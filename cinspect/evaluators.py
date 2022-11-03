@@ -264,7 +264,6 @@ class PartialDependanceEvaluator(Evaluator):
         """Construct a PartialDependanceEvaluator."""
         self.feature_grids = feature_grids
         self.conditional_filter = conditional_filter
-        self.filter_name = filter_name
         self.end_transform_indx = end_transform_indx
 
     def prepare(self, estimator, X, y, random_state=None):
@@ -361,9 +360,10 @@ class PartialDependanceEvaluator(Evaluator):
             _description_, by default None
         ci_bounds: tuple, optional
             _description_, by default (0.025, 0.975)
-        name: str, optional
-            a name to prepend to the PD plot titles
-
+        tname: str, optional
+            a name to prepend to the feature names in PD plots
+        yname: str, optional
+            a name to #TODO document here and plot_partial_dependence_with_uncertainty
         Returns
         -------
         dict[str, mpl.figure.Figure]
@@ -383,8 +383,8 @@ class PartialDependanceEvaluator(Evaluator):
             predictions = evaluation[dep_name]
             if dep.valid:
                 fname = dep.feature_name
-                if name is not None:
-                    fname = name + " " + fname
+                if tname is not None:
+                    fname = tname + " " + fname
                 fig, res = dependence.plot_partial_dependence_with_uncertainty(
                     dep.grid,
                     predictions,
