@@ -40,4 +40,4 @@ jobs:
 #          make typecheck      
       - name: Test
         run: |
-          make test
+          make test-ci

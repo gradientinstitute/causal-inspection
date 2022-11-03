@@ -26,4 +26,7 @@ isort:
 	isort .
 
 test:
-	pytest . --cov=cinspect tests/	
+	pytest . --cov=cinspect tests/
+
+test-ci:
+	pytest . --cov=cinspect tests/ --hypothesis-profile "ci"
