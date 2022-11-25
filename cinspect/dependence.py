@@ -205,7 +205,7 @@ def plot_partial_dependence_density(
         ax.set_ylabel("counts")
 
     else:
-        density, grid = ax.hist(density, color=color, alpha=alpha)
+        density, grid, _ = ax.hist(density, color=color, alpha=alpha)
         ax.set_ylabel("counts")
 
     # set the main axis on which partial dependence is plotted
