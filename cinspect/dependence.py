@@ -185,6 +185,8 @@ def construct_grid(
                 raise ValueError(
                     "Could not create grid: " "linspace({low}, {high}, {grid_values})"
                 )
+            if np.any(np.isnan(v)):
+                grid = np.concatenate((grid, [np.nan]))
 
     return grid, grid_counts
 
