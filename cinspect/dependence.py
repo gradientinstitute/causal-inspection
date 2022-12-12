@@ -207,7 +207,17 @@ def plot_partial_dependence_density(
         ax.set_ylabel("counts")
 
     else:
-        density, grid, _ = ax.hist(density, color=color, alpha=alpha)
+        # bins = np.digitize(density, grid)
+        # vals = grid[bins-1]
+        # counts = pd.Series(vals).value_counts(dropna=False)
+        # counts = counts.iloc[np.argsort(counts.index)]
+        # labels = [f"{v:.3f}" for v in counts.index]
+        # grid = counts.index
+        # ax.bar(height=counts, x=grid, tick_label=labels, color=color,
+        #        alpha=alpha)
+        # ax.set_xticklabels(labels, rotation=45, horizontalalignment="right")
+        bins = sum(~np.isnan(grid))
+        density, grid, _ = ax.hist(density, bins=bins, color=color, alpha=alpha)
         ax.set_ylabel("counts")
 
     # set the main axis on which partial dependence is plotted
@@ -313,17 +323,35 @@ def plot_partial_dependence_with_uncertainty(
     if ax.get_xlabel() is None:
         ax.set_xlabel(feature_name)
 
+    nanx = np.isnan(x)
+    xmin, xmax = np.nanmin(x), np.nanmax(x)
+
     if mode == "multiple-pd-lines":
         pds = _pd_from_ice(predictions)
         ax.plot(x, pds.T, color=color_samples, alpha=alpha)
         mean_pd = pds.mean(axis=0)
         ax.plot(x, mean_pd, color=color, linestyle="--", label=label)
         res |= {"mean": mean_pd, "samples": pds}
+        if any(nanx):
+            nanpd = pds[:, nanx].mean()
+            ax.plot([xmin, xmax], [nanpd, nanpd], "g-", alpha=alpha,
+                    label="Missing (mean)")
+            ax.legend()
+            res |= {"missing_mean": nanpd}
 
     elif mode == "ice-mu-sd":
         p_all = np.vstack(predictions)
         mu = p_all.mean(axis=0)
         s = p_all.std(axis=0)
+        if any(nanx):
+            nanm = np.squeeze(mu[nanx])
+            nans = np.squeeze(s[nanx])
+            lower = np.array([nanm, nanm]) - nans
+            upper = lower + 2 * nans
+            ax.fill_between([xmin, xmax], lower, upper, alpha=alpha, color="g")
+            ax.plot([xmin, xmax], [nanm, nanm], "g-", label="Missing (mean)")
+            ax.legend()
+            res |= {"missing_mean": nanm, "missing_std": nans}
         ax.fill_between(x, mu - s, mu + s, alpha=alpha)
         ax.plot(x, mu)
         res |= {"mean": mu, "std": s}
@@ -339,6 +367,14 @@ def plot_partial_dependence_with_uncertainty(
             ax.set_title(dtitle)
             llabel += " derivative"
             ylabel = "$\\Delta $" + ylabel
+        elif any(nanx):
+            nanm = np.squeeze(mu[nanx])
+            nanl = np.squeeze(l[nanx])
+            nanu = np.squeeze(u[nanx])
+            ax.fill_between([xmin, xmax], [nanl, nanl], [nanu, nanu], alpha=alpha,
+                            color="g", label=f"CI: {ci_bounds} (missing)")
+            ax.plot([xmin, xmax], [nanm, nanm], "g-", label="mean (missing)")
+            res |= {"missing_mean": nanm, "missing_lower": nanl, "missing_upper": nanu}
         ax.fill_between(x, l, u, alpha=alpha, label=f"CI: {ci_bounds}")
         ax.plot(x, mu, label=llabel)
         ax.set_ylabel(ylabel)

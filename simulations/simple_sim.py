@@ -13,6 +13,8 @@ from cinspect.evaluators import (
 )
 from cinspect.model_evaluation import bootcross_model
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import GridSearchCV, GroupKFold
 
 from simulations.datagen import simple_triangle
@@ -22,6 +24,9 @@ LOG = logging.getLogger(__name__)
 
 # Log INFO to STDOUT
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
+
+# Other settings
+RANDOM_SEED = 42
 
 
 def main():
@@ -33,7 +38,8 @@ def main():
     plt.figure()
 
     # Generate data for the scenario
-    data = dgp.sample(1000)
+    n = 1000
+    data = dgp.sample(n)
 
     # Generate interventional data for plotting the average causal effect for
     # each intervention level.
@@ -55,13 +61,21 @@ def main():
     dX = data.pop("X")
     data.update({f"X{i}": x for i, x in enumerate(dX.T)})
     X = pd.DataFrame(data)
+    
+    # Randomly insert missing treatments
+    rand = np.random.RandomState(seed=RANDOM_SEED)
+    randnan = rand.binomial(n=1, p=0.05, size=n).astype(bool)
+    X.loc[randnan, "T"] = np.nan
 
     # Model selection
     # GroupKFold is used to make sure grid search does not use the same samples
     # from the bootstrapping procedure later in the training and testing folds
     model = GridSearchCV(
-        GradientBoostingRegressor(),
-        param_grid={"max_depth": [1, 2]},
+        make_pipeline(
+            SimpleImputer(),
+            GradientBoostingRegressor(),
+        ),
+        param_grid={"gradientboostingregressor__max_depth": [1, 2]},
         cv=GroupKFold(n_splits=5),
     )
 
@@ -69,12 +83,13 @@ def main():
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
     pieval = PermutationImportanceEvaluator(n_repeats=5)
     bootcross_model(
-        model, X, Y, [pdeval, pieval], replications=30, use_group_cv=True
+        model, X, Y, [pdeval, pieval], replications=10, use_group_cv=True
     )  # To make sure we pass use GroupKFold
 
     pdeval.get_results(mode="interval")
     pdeval.get_results(mode="derivative")
     pdeval.get_results(mode="multiple-pd-lines")
+    pdeval.get_results(mode="ice-mu-sd")
     pieval.get_results(ntop=5)
 
     plt.show()
