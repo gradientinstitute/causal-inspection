@@ -1,7 +1,7 @@
-.. _evaluators:
+.. _dependence:
 
-cinspect.evaluators
-=============
+cinspect.dependence
+===================
 
-.. automodule:: cinspect.evaluators
+.. automodule:: cinspect.dependence
     :members:

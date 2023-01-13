@@ -1,7 +1,7 @@
-.. _evaluators:
+.. _importance:
 
-cinspect.evaluators
-=============
+cinspect.importance
+===================
 
-.. automodule:: cinspect.evaluators
+.. automodule:: cinspect.importance
     :members:
