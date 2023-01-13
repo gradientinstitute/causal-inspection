@@ -10,6 +10,8 @@ Welcome to Causal Inspection's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   api/api
+
 
 
 Indices and tables
