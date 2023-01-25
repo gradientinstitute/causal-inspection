@@ -3,7 +3,7 @@
 """Partial dependence and individual conditional expectation functions."""
 
 import numbers
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -193,11 +193,46 @@ def construct_grid(
 
 def plot_partial_dependence_density(
     ax, grid, density, feature_name, categorical, color="black", alpha=0.5
-):
-    """Plot partial dependency on ax.
-
-    TODO: proper docstring
+) -> Tuple[np.ndarray, Union[np.ndarray, List[np.ndarray]]]:
     """
+    Plot partial dependency on axes ax.
+
+    TODO next
+
+    Parameters
+    ----------
+    ax : _type_
+        _description_
+    grid : _type_
+        _description_
+    density : _type_
+        _description_
+    feature_name : _type_
+        _description_
+    categorical : _type_
+        _description_
+    color : str, optional
+        _description_, by default "black"
+    alpha : float, optional
+        _description_, by default 0.5
+
+    Returns
+    -------
+    bins: : np.ndarray
+        The edges of the bins. Length nbins + 1 (nbins left edges and right edge of last bin). 
+        Always a single array even when multiple data sets are passed in.
+
+    n : Union[np.ndarray, List[np.ndarray]]]
+        The values of the histogram bins.
+        If input x is an array, then this is an array of length nbins.
+        If input is a sequence of arrays [data1, data2, ...],
+        then this is a list of arrays with the values
+        of the histograms for each of the arrays in the same order.
+        The dtype of the array n (or of its element arrays) will always be float
+        even if no weighting or normalization is used.
+
+    """
+
     # plot the distribution for of the variable on the second axis
     if categorical:
         x = np.arange(len(grid))

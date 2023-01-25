@@ -5,9 +5,8 @@
 from typing import NamedTuple, Union
 
 import numpy as np
-
 from scipy import linalg, stats
-from sklearn.base import BaseEstimator, RegressorMixin, clone, check_X_y
+from sklearn.base import BaseEstimator, RegressorMixin, check_X_y, clone
 from sklearn.linear_model import BayesianRidge, LinearRegression
 from sklearn.utils.validation import check_is_fitted
 
@@ -74,7 +73,19 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
     def fit(self, X, y, sample_weight=None):
         """Fit linear regression model to data.
 
-        TODO: complete docstring
+        Parameters
+        ----------
+        X : np.typing.ArrayLike TODO I believe this includes dataframes: verify
+            Training features, of shape (n_samples, n_features)
+        y : np.typing.ArrayLike
+            Training targets, of shape (n_samples, n_targets)
+        sample_weight : np.typing.ArrayLike, optional
+            Weights for each sample, of shape (n_samples, ), by default None
+
+        Returns
+        -------
+        self : LinearRegressionStat
+            The fitted object
         """
         super().fit(X, y, sample_weight)
         X, y = check_X_y(X, y)
@@ -95,8 +106,21 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
     def fit(self, X, y, sample_weight=None):
         """Fit bayesian ridge estimator to data.
 
-        TODO: complete docstring
+        Parameters
+        ----------
+        X : np.typing.ArrayLike
+            Training features, of shape (n_samples, n_features).
+        y : np.typing.ArrayLike
+            Training targets, of shape (n_samples, n_targets)
+        sample_weight : np.typing.ArrayLike, optional
+            Weights for each sample, of shape (n_samples, ), by default None
+
+        Returns
+        -------
+        self : BayesianRegressionStat
+            The fitted object
         """
+
         super().fit(X, y, sample_weight)
         X, y = check_X_y(X, y)
         n, d = len(X), len(self.coef_)
@@ -123,10 +147,12 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
 
     Parameters
     ----------
-    estimator: scikit learn compatible estimator
+    estimator: scikit learn compatible estimator 
         TODO
+        TODO should this strictly be a sklearn.RegressorMixin?
     treatment_column: str or int
         TODO
+        TODO: str only if it's a dataframe
     treatment_val: any
         TODO
     """
@@ -148,9 +174,9 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         Parameters
         ----------
         X: ndarray or DataFrame
-            TODO
+            Training features, of shape (n_samples, n_features)
         y: ndarray or DataFrame
-            TODO
+            Training targets, of shape (n_samples, n_targets)
         groups: ndarray, optional
             Group labels for the samples used while splitting the dataset into
             train/test set. Only used in conjunction with a parameter search
@@ -176,7 +202,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         return self
 
     def predict(self, X):
-        """Predict the outcomes."""
+        """Predict the outcomes. TODO"""
         check_is_fitted(self, attributes=["t_estimator_", "c_estimator_"])
         Xt, Xc, t_mask = _treatment_split(X, self.treatment_column, self.treatment_val)
         Ey = np.zeros(len(X))
