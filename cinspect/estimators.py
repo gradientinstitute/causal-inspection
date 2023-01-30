@@ -2,9 +2,10 @@
 # Licensed under the Apache 2.0 License.
 """Convenience estimators for causal estimation."""
 
-from typing import NamedTuple, Union
+from typing import Any, NamedTuple, Optional, Union
 
 import numpy as np
+import numpy.typing as npt
 from scipy import linalg, stats
 from sklearn.base import BaseEstimator, RegressorMixin, check_X_y, clone
 from sklearn.linear_model import BayesianRidge, LinearRegression
@@ -54,8 +55,17 @@ class RegressionStatisticalResults(NamedTuple):
 
 
 class _StatMixin:
-    def model_statistics(self):
-        """Get the coefficient statistics for this estimator."""
+    """TODO justify existence."""
+
+    def model_statistics(self) -> RegressionStatisticalResults:
+        """
+        Get the linear coefficient statistics for this estimator.
+
+        Returns
+        -------
+        RegressionStatisticalResults
+            Linear coefficient statistics for this estimator.
+        """
         check_is_fitted(self, attributes=["coef_", "coef_se_"])
         stats = RegressionStatisticalResults(
             beta=self.coef_,
@@ -75,11 +85,12 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
 
         Parameters
         ----------
-        X : np.typing.ArrayLike TODO I believe this includes dataframes: verify
+        X : npt.ArrayLike
             Training features, of shape (n_samples, n_features)
-        y : np.typing.ArrayLike
+            TODO I believe ArrayLike includes dataframes: verify
+        y : npt.ArrayLike
             Training targets, of shape (n_samples, n_targets)
-        sample_weight : np.typing.ArrayLike, optional
+        sample_weight : npt.ArrayLike, optional
             Weights for each sample, of shape (n_samples, ), by default None
 
         Returns
@@ -108,11 +119,11 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
 
         Parameters
         ----------
-        X : np.typing.ArrayLike
+        X : npt.ArrayLike
             Training features, of shape (n_samples, n_features).
-        y : np.typing.ArrayLike
+        y : npt.ArrayLike
             Training targets, of shape (n_samples, n_targets)
-        sample_weight : np.typing.ArrayLike, optional
+        sample_weight : npt.ArrayLike, optional
             Weights for each sample, of shape (n_samples, ), by default None
 
         Returns
@@ -120,7 +131,6 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
         self : BayesianRegressionStat
             The fitted object
         """
-
         super().fit(X, y, sample_weight)
         X, y = check_X_y(X, y)
         n, d = len(X), len(self.coef_)
@@ -147,21 +157,24 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
 
     Parameters
     ----------
-    estimator: scikit learn compatible estimator 
-        TODO
-        TODO should this strictly be a sklearn.RegressorMixin?
-    treatment_column: str or int
-        TODO
+    estimator : BaseEstimator
+        scikit learn compatible estimator,
+        from which separate treatment and control estimators will be generated
+        TODO perhaps allow separate estimators for treatment and control;
+    treatment_column: Union[str, int]
+        Treatment column index
         TODO: str only if it's a dataframe
-    treatment_val: any
-        TODO
+    treatment_val: Optional[Any], default 1
+        Constant value of treatment column 
+        which denotes that the current row is in the treatment cohort
+        TODO example
     """
 
     def __init__(
         self,
-        estimator,
-        treatment_column,
-        treatment_val=1,
+        estimator : BaseEstimator,
+        treatment_column : Union[str, int],
+        treatment_val : Optional[Any] = 1,
     ):
         """Construct a new instance of a BinaryTreatmentRegressor."""
         self.estimator = estimator
@@ -201,8 +214,20 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         self.c_estimator_.fit(Xc, yc)
         return self
 
-    def predict(self, X):
-        """Predict the outcomes. TODO"""
+    def predict(self, X: npt.ArrayLike) -> np.ndarray:
+        """
+        Predict the outcomes, choosing the estimator based on the value of treatment column.
+
+        Parameters
+        ----------
+        X : npt.ArrayLike
+            Features, of shape (n_prediction_samples, n_features)
+
+        Returns
+        -------
+        y : np.ndarray
+            Predicted outcomes, of shape (n_prediction_samples, n_targets)
+        """
         check_is_fitted(self, attributes=["t_estimator_", "c_estimator_"])
         Xt, Xc, t_mask = _treatment_split(X, self.treatment_column, self.treatment_val)
         Ey = np.zeros(len(X))
@@ -214,7 +239,11 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         return Ey
 
     def get_params(self, deep: bool = True) -> dict:
-        """Get this estimator's initialisation parameters."""
+        """Get this estimator's initialisation parameters.
+
+        TODO docstring
+        TODO dummy deep parameter: is this for sklearn's benefit?
+        """
         return {
             "estimator": self.estimator,
             "treatment_column": self.treatment_column,
@@ -222,7 +251,10 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         }
 
     def set_params(self, **parameters: dict):
-        """Set this estimator's initialisation parameters."""
+        """Set this estimator's initialisation parameters.
+
+        TODO docstring
+        """
         for parameter, value in parameters.items():
             setattr(self, parameter, value)
         return self
