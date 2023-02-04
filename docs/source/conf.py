@@ -29,14 +29,18 @@ extensions = ['sphinx.ext.autodoc',
 templates_path = ['_templates']
 exclude_patterns = []
 
-# -- Options for sphinx.ext.extlinks 
+# -- Options for sphinx.ext.autodoc
+
+autoclass_content = 'class'  # 'both': concatenate, display *both* the class and __init__ docstrings
+
+# -- Options for sphinx.ext.extlinks
 
 # use :issue:`123` to link to project issue on GitHub
 extlinks = {'issue': ('https://github.com/gradientinstitute/cinspect/issues/%s',
                       'issue %s')}
 
 
-# -- Options for sphinx.ext.intersphinx 
+# -- Options for sphinx.ext.intersphinx
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        'scikit-learn': ('https://scikit-learn.org/stable/', None),

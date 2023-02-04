@@ -139,10 +139,22 @@ class ScoreEvaluator(Evaluator):
 
 class BinaryTreatmentEffect(Evaluator):
     """Estimate average BTE, using estimator to generate counterfactuals.
-
+        
     NOTE: This assumes SUTVA holds.
-    """
 
+    Parameters
+    ----------
+    treatment_column: Union[str, int]
+        Treatment variable's column index
+    treatment_val: Any, optional
+        Value of treatment variable when "treated" , by default 1
+    control_val: Any, optional
+        Value of treatment variable when "untreated", by default 0
+    evaluate_mode: str, optional
+        Evaluation mode; "train"/"test"/"all", by default "all"
+    """
+    
+    # type of the Evaluation produced
     BTEEvaluation = List[float]
 
     def __init__(
@@ -151,19 +163,7 @@ class BinaryTreatmentEffect(Evaluator):
         treatment_val: Any = 1,
         control_val: Any = 0,
     ):
-        """Construct BTE estimator.
-
-        Parameters
-        ----------
-        treatment_column:Union[str, int]
-            Treatment variable's column index
-        treatment_val:Any, optional
-            Value of treatment variable when "treated" , by default 1
-        control_val:Any, optional
-            Value of treatment variable when "untreated", by default 0
-        evaluate_mode:str, optional
-            Evaluation mode; "train"/"test"/"all", by default "all"
-        """
+        """Construct a BTEvaluation object."""
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
         self.control_val = control_val
