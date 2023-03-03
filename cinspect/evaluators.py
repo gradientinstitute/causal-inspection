@@ -139,7 +139,7 @@ class ScoreEvaluator(Evaluator):
 
 class BinaryTreatmentEffect(Evaluator):
     """Estimate average BTE, using estimator to generate counterfactuals.
-        
+
     NOTE: This assumes SUTVA holds.
 
     Parameters
@@ -153,7 +153,7 @@ class BinaryTreatmentEffect(Evaluator):
     evaluate_mode: str, optional
         Evaluation mode; "train"/"test"/"all", by default "all"
     """
-    
+
     # type of the Evaluation produced
     BTEEvaluation = List[float]
 

@@ -2,7 +2,7 @@
 # Licensed under the Apache 2.0 License.
 """Convenience estimators for causal estimation."""
 
-from typing import Any, NamedTuple, Optional, Union
+from typing import Any, NamedTuple, Optional, Union  # , Self
 
 import numpy as np
 import numpy.typing as npt
@@ -16,6 +16,9 @@ from cinspect.utils import get_column
 
 class RegressionStatisticalResults(NamedTuple):
     """Statistical results object for linear regressors.
+
+    TODO should this be private? Only used internally
+    TODO sphinx parses attributes directly
 
     Attributes
     ----------
@@ -55,7 +58,7 @@ class RegressionStatisticalResults(NamedTuple):
 
 
 class _StatMixin:
-    """TODO justify existence."""
+    """Mixin to get linear coefficient statistics for an estimator."""
 
     def model_statistics(self) -> RegressionStatisticalResults:
         """
@@ -66,6 +69,7 @@ class _StatMixin:
         RegressionStatisticalResults
             Linear coefficient statistics for this estimator.
         """
+        # TODO should we not check that dof_, t_ p_ are fitted as well?
         check_is_fitted(self, attributes=["coef_", "coef_se_"])
         stats = RegressionStatisticalResults(
             beta=self.coef_,
@@ -152,7 +156,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
     depending on the value of the treatment.
 
     NOTE: This can be used in conjunction with the
-    `evaluators.BinaryTreatmentEffect` evaluator to obtain statistics of a
+    :class:`cinspect.evaluators.BinaryTreatmentEffect` evaluator to obtain statistics of a
     binary treatment.
 
     Parameters
@@ -165,7 +169,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         Treatment column index
         TODO: str only if it's a dataframe
     treatment_val: Optional[Any], default 1
-        Constant value of treatment column 
+        Constant value of treatment column
         which denotes that the current row is in the treatment cohort
         TODO example
     """
@@ -239,10 +243,25 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         return Ey
 
     def get_params(self, deep: bool = True) -> dict:
-        """Get this estimator's initialisation parameters.
+        """
+        Get parameters for this estimator.
 
-        TODO docstring
-        TODO dummy deep parameter: is this for sklearn's benefit?
+        This is a method of :class:`~sklearn.base.BaseEstimator`.
+
+        TODO make deep argument functional.
+        I believe this implementation could be replaced with the class's default implementation
+
+        Parameters
+        ----------
+        deep : bool, optional
+            If True, will return the parameters for this estimator and contained subobjects
+            that are estimators.
+            By default True
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
         """
         return {
             "estimator": self.estimator,
@@ -250,12 +269,31 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
             "treatment_val": self.treatment_val,
         }
 
-    def set_params(self, **parameters: dict):
-        """Set this estimator's initialisation parameters.
-
-        TODO docstring
+    def set_params(self, **params: dict) -> Any:  # TODO use Self: PEP 673, Python 3.11
         """
-        for parameter, value in parameters.items():
+        Set the parameters of this estimator.
+
+        This is a method of :class:`~sklearn.base.BaseEstimator`.
+
+        TODO satisfy the following:
+
+        The method works on simple estimators as well as on nested objects (such as Pipeline).
+        The latter have parameters of the form <component>__<parameter>
+        so that it's possible to update each component of a nested object.
+
+        TODO I believe this could be replaced with the base class's implementation
+
+        Parameters
+        ----------
+        **params : dict
+            BinaryTreatmentRegressor parameters.
+
+        Returns
+        -------
+        self: BinaryTreatmentRegressor
+            BinaryTreatmentRegressor instance.
+        """
+        for parameter, value in params.items():
             setattr(self, parameter, value)
         return self
 
