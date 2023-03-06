@@ -6,7 +6,8 @@ import functools
 import logging
 import operator
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Sequence, TypeVar, Union
+from typing import (Any, Callable, Dict, List, Optional, Sequence, TypeVar,
+                    Union)
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -22,38 +23,51 @@ from cinspect.utils import get_column
 
 LOG = logging.getLogger(__name__)
 
-Estimator = TypeVar("Estimator") # intention is an sklearn estimator
+# TODO sphinx documentation of custom types/type aliases
+Estimator = TypeVar("Estimator")  # intention is an sklearn estimator
+
+# random states as per sklearn
+# https://scikit-learn.org/dev/glossary.html#term-random_state
+RandomStateType = Optional[Union[int, np.random.RandomState]]
+
 
 class Evaluator:
-
     """Abstract class for Evaluators to inherit from.
-    
+
     Each subclass should have an associated Evaluation type.
     This should be a monoid, where :method:`Evaluator.aggregate` is the monoid operation.
 
     Internal state should be this Evaluation; should be initialised with the Monoidal identity
 
-    TODO: can we just unify Evaluator and Evaluation? 
-    Mostly... Evaluator just holds metadata for its Evaluation
+    TODO: should we reunify Evaluator and Evaluation?
+    Mostly... Evaluator holds metadata for its Evaluation.
+    Liskov substitution principle suggests that subtypes should be swappable;
+    this is not currently true because we can't enforce the behaviour of the objects' consumers
     """
 
     Evaluation = TypeVar("Evaluation")
 
-    def prepare(self, estimator : Estimator, X, y=None, random_state=None) -> None:
+    def prepare(self,
+                estimator : Estimator,
+                X: npt.ArrayLike,
+                y: Optional[npt.ArrayLike] = None,
+                random_state=RandomStateType) -> None:
         """Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    def evaluate(self, estimator : Estimator, X: npt.ArrayLike, y : Optional[npt.ArrayLike] = None) -> Evaluation:
+    def evaluate(self,
+                 estimator : Estimator,
+                 X: npt.ArrayLike,
+                 y : Optional[npt.ArrayLike] = None) -> Evaluation:
         """
         Evaluate the fitted estimator with test, training or all data.
 
         Subclasses should ensure that this is a pure function.
 
         This is called by a model evaluation function in model_evaluation.
-        
 
         Parameters
         ----------
@@ -75,17 +89,21 @@ class Evaluator:
         """
         Aggregate the evaluation results.
 
-        This is called by a model evaluation function in model_evaluation, and is crucial for parallelisation.
+        This is called by a model evaluation function in model_evaluation,
+        and is crucial for parallelisation.
 
         Evaluation should be a monoid with respect to this operation for sane behaviour:
           - identity:
-            - aggregate([]) == unit 
-            - aggregate( [unit] + evals ) == aggregate(evals) == aggregate(evals + [unit]) # unit is left/right identity
+            - aggregate([]) == unit
+            - aggregate( [unit] + evals ) == aggregate(evals) == aggregate(evals + [unit])
           - associative:
-            - aggregate(aggregate([a]), aggregate([b,c]) == aggregate([a,b,c]) == aggregate(aggregate([a,b ]), aggregate([c])
+            - aggregate(aggregate([a]), aggregate([b,c])
+              == aggregate([a,b,c])
+              == aggregate(aggregate([a,b ]), aggregate([c])
 
         TODO examples
-        TODO e.g. Evaluation could be a list of statistics, could be (mean, count) of a statistic, could be combinable graphic
+        e.g. Evaluation could be a list of statistics, could be (mean, count) of a statistic,
+        could be combinable graphic
 
 
         Parameters
@@ -98,8 +116,6 @@ class Evaluator:
         Evaluation
             The combination of these evaluations
         """
-        
-        
         pass
 
     def set_evaluation(self, evaluation: Evaluation) -> None:
@@ -127,7 +143,6 @@ class Evaluator:
         representation as an Evaluation.
 
         This could be a pandas dataframe, a matplotlib figure, etc.
-        
 
         Parameters
         ----------
@@ -143,7 +158,7 @@ class Evaluator:
             evaluation = self.evaluation
         else:
             raise Exception("No given/stored Evaluation")
-        
+
         return evaluation
 
 
@@ -154,14 +169,27 @@ class ScoreEvaluator(Evaluator):
 
     Parameters
     ----------
-    scorers: list[str|scorer]
-        List of scorers to compute
+    scorers: list[str|Scorer]
+        List of scorers/scorer names to compute.
+        Names -> scorer correspondence dictated by `sklearn.metrics.get_scorer`
     groupby: (optional) str or list[str]
         List or string indicating that scores should be calculated
-        separately within groups defined by this variable.
+        separately within groups defined by this/these variables.
+        TODO: this is currently implemented implicitly using pandas
     """
 
-    def __init__(self, scorers, groupby=None):
+    # I'm trying to encode that this should be a scalar
+    Score = TypeVar("Score")
+
+    # TODO sphinx documentation of custom types
+    # an sklearn Scorer takes an estimator, X and optional y, and returns a scalar score
+    # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.make_scorer.html#sklearn.metrics.make_scorer
+    Scorer = Callable[[Estimator, npt.ArrayLike, Optional[npt.ArrayLike]], Score]
+    ScoreEvaluation = Dict[str, List[Score]]
+
+    def __init__(self,
+                 scorers: List[Union[str, Scorer]],
+                 groupby : Optional[Union[str, List[str]]] = None):
         """Initialise a ScoreEvaluator object."""
         self.scorers = {}  # map from name to scorer
         for s in scorers:
@@ -171,18 +199,25 @@ class ScoreEvaluator(Evaluator):
                 self.scorers[str(s)] = s
 
         self.groupby = groupby
-        self.scores = defaultdict(list)
+        self.scores : Dict[str, self.Score] = defaultdict(list)
 
-    def evaluate(self, estimator, X, y):
+    def evaluate(self,
+                 estimator: Estimator,
+                 X: npt.ArrayLike,
+                 y: Optional[npt.ArrayLike]) -> ScoreEvaluation:
         """Evaluate the fitted estimator with data.
 
         This is called by a model evaluation function in model_evaluation.
         """
+        X = pd.DataFrame(X)
+        y = pd.DataFrame(y) if y is not None else None
+
         scores = defaultdict(list)
         if self.groupby is not None:
+            # TODO: this makes X/y implicitly a dataframe. Is this intended?
             groups = X.groupby(self.groupby)
             for group_key, Xs in groups:
-                ys = y[Xs.index]
+                ys = y[Xs.index]  # TODO currently there is an error if y is None
                 scores["group"].append(group_key)
                 for s_name, s in self.scorers.items():
                     scores[s_name].append(s(estimator, Xs, ys))
@@ -190,11 +225,26 @@ class ScoreEvaluator(Evaluator):
         else:
             for s_name, s in self.scorers.items():
                 scores[s_name].append(s(estimator, X, y))
+        self.evaluation = scores
         return scores
 
-    def get_results(self, evaluation, **kwargs):
-        """Get the scores of the estimator."""
-        evaluation = evaluation if evaluation is not None else self.evaluation
+    def get_results(self,
+                    evaluation : Optional[ScoreEvaluation] = None,
+                    **kwargs: List[Any]) -> pd.DataFrame:
+        """
+        Get the scores of the estimator.
+
+        Parameters
+        ----------
+        evaluation : Optional[ScoreEvaluation], by default None
+            ScoreEvaluation object to convert. Otherwise extract this object's stored scores.
+
+        Returns
+        -------
+        dfscores: pd.DataFrame
+            ScoreEvaluation as a dataframe
+        """
+        evaluation = super().get_results(evaluation, **kwargs)
         dfscores = pd.DataFrame(evaluation) if evaluation is not None else None
         return dfscores
 
