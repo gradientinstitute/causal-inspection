@@ -22,36 +22,87 @@ from cinspect.utils import get_column
 
 LOG = logging.getLogger(__name__)
 
-Evaluation = TypeVar("Evaluation")
-
+Estimator = TypeVar("Estimator") # intention is an sklearn estimator
 
 class Evaluator:
-    """Abstract class for Evaluators to inherit from."""
 
-    def prepare(self, estimator, X, y=None, random_state=None):
+    """Abstract class for Evaluators to inherit from.
+    
+    Each subclass should have an associated Evaluation type.
+    This should be a monoid, where :method:`Evaluator.aggregate` is the monoid operation.
+
+    Internal state should be this Evaluation; should be initialised with the Monoidal identity
+
+    TODO: can we just unify Evaluator and Evaluation? 
+    Mostly... Evaluator just holds metadata for its Evaluation
+    """
+
+    Evaluation = TypeVar("Evaluation")
+
+    def prepare(self, estimator : Estimator, X, y=None, random_state=None) -> None:
         """Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
         """
         pass
 
-    def evaluate(self, estimator, X, y=None) -> Evaluation:
-        """Evaluate the fitted estimator with test, training or all data.
+    def evaluate(self, estimator : Estimator, X: npt.ArrayLike, y : Optional[npt.ArrayLike] = None) -> Evaluation:
+        """
+        Evaluate the fitted estimator with test, training or all data.
 
         Subclasses should ensure that this is a pure function.
 
         This is called by a model evaluation function in model_evaluation.
+        
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        Evaluation
+            A subclass-specific evaluation object
         """
         pass
 
     def aggregate(self, evaluations: Sequence[Evaluation]) -> Evaluation:
-        """Aggregate the evaluation results.
-
-        This is called by a model evaluation function in model_evaluation.
         """
+        Aggregate the evaluation results.
+
+        This is called by a model evaluation function in model_evaluation, and is crucial for parallelisation.
+
+        Evaluation should be a monoid with respect to this operation for sane behaviour:
+          - identity:
+            - aggregate([]) == unit 
+            - aggregate( [unit] + evals ) == aggregate(evals) == aggregate(evals + [unit]) # unit is left/right identity
+          - associative:
+            - aggregate(aggregate([a]), aggregate([b,c]) == aggregate([a,b,c]) == aggregate(aggregate([a,b ]), aggregate([c])
+
+        TODO examples
+        TODO e.g. Evaluation could be a list of statistics, could be (mean, count) of a statistic, could be combinable graphic
+
+
+        Parameters
+        ----------
+        evaluations : Sequence[Evaluation]
+            A collection of evaluations
+
+        Returns
+        -------
+        Evaluation
+            The combination of these evaluations
+        """
+        
+        
         pass
 
-    def set_evaluation(self, evaluation: Evaluation):
+    def set_evaluation(self, evaluation: Evaluation) -> None:
         """Setter; sets this object's evaluation.
 
         Subclasses should ensure that this and self.prepare(..)
@@ -60,28 +111,39 @@ class Evaluator:
 
         Parameters
         ----------
-        evaluation:Evaluation
+        evaluation: Evaluation
             The new internal evaluation.
         """
         self.evaluation = evaluation
 
     def get_results(
-        self, evaluation: Optional[Evaluation] = None, **kwargs
-    ) -> Optional[Any]:
+        self, evaluation: Optional[Evaluation] = None, **kwargs : Any
+    ) -> Any:
         """View the evaluator's results.
 
-        Default implementation returns the given evaluation/the stored
-        evaluation. but this may be overridden if there is a canonical
+        Default implementation returns the given Evaluation/the stored
+        Evaluation. but this may be overridden if there is a canonical
         representation of the results that differs from the results' internal
-        representation.
+        representation as an Evaluation.
 
         This could be a pandas dataframe, a matplotlib figure, etc.
+        
+
+        Parameters
+        ----------
+        evaluation : Evaluation, optional
+            The evaluation to convert, by default None
+
+        Returns
+        -------
+        Any
+            _description_
         """
-        evaluation = (
-            evaluation
-            if evaluation is not None
-            else (self.evaluation if hasattr(self, "evaluation") else None)
-        )
+        if evaluation is None and hasattr(self, "evaluation"):
+            evaluation = self.evaluation
+        else:
+            raise Exception("No given/stored Evaluation")
+        
         return evaluation
 
 
