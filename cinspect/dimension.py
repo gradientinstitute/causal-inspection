@@ -2,9 +2,10 @@
 # Licensed under the Apache 2.0 License.
 """Methods for reducing or understanding the dimensionality of a matrix."""
 
+from typing import Callable, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Callable, Tuple, List, Optional, Union
 
 
 def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:

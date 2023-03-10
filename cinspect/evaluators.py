@@ -28,6 +28,7 @@ Estimator = TypeVar("Estimator")  # intention is an sklearn estimator
 
 # random states as per sklearn
 # https://scikit-learn.org/dev/glossary.html#term-random_state
+# TODO sphinx documentation
 RandomStateType = Optional[Union[int, np.random.RandomState]]
 
 
@@ -51,10 +52,27 @@ class Evaluator:
                 estimator : Estimator,
                 X: npt.ArrayLike,
                 y: Optional[npt.ArrayLike] = None,
-                random_state=RandomStateType) -> None:
-        """Prepare the evaluator with model and data information.
+                random_state: RandomStateType = None) -> None:
+        """
+        Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+         Optional[Union[int, np.random.RandomState]], optional
+            Random state, by default RandomStateType
+
+        Parameters
+        ----------
+        estimator : Estimator
+            Estimator to evaluate
+        X : npt.ArrayLike
+            Features used for preparation (sub-class dependent semantics). Shape (n_features, n_rows)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets used for preparation, of shape (n_samples, n_targets), by default None.
+        random_state : RandomStateType, optional
+            Random state, by default None
         """
         pass
 

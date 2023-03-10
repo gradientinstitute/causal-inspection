@@ -32,7 +32,7 @@ exclude_patterns = []
 # -- Options for sphinx.ext.autodoc
 
 autoclass_content = 'class'  # 'both': concatenate, display *both* the class and __init__ docstrings
-
+autodoc_typehints = "both" # make explicit that typehints are shown in the signature, rather than the description
 # -- Options for sphinx.ext.extlinks
 
 # use :issue:`123` to link to project issue on GitHub
