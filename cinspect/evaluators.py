@@ -181,7 +181,8 @@ class Evaluator:
 
 
 class ScoreEvaluator(Evaluator):
-    """Score an estimator on test data.
+    """    
+    Score an estimator on test data.
 
     This emulates scikit-learn's cross_validate functionality.
 
@@ -202,7 +203,7 @@ class ScoreEvaluator(Evaluator):
     # TODO sphinx documentation of custom types
     # an sklearn Scorer takes an estimator, X and optional y, and returns a scalar score
     # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.make_scorer.html#sklearn.metrics.make_scorer
-    Scorer = Callable[[Estimator, npt.ArrayLike, Optional[npt.ArrayLike]], Score]
+    Scorer = Callable[[Estimator, Optional[npt.ArrayLike]], Score]
     ScoreEvaluation = Dict[str, List[Score]]
 
     def __init__(self,
@@ -223,10 +224,25 @@ class ScoreEvaluator(Evaluator):
                  estimator: Estimator,
                  X: npt.ArrayLike,
                  y: Optional[npt.ArrayLike]) -> ScoreEvaluation:
-        """Evaluate the fitted estimator with data.
+        """Score the fitted estimator with data.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        evaluation: ScoreEvaluation
+            Dictionary of scores
         """
+       
         X = pd.DataFrame(X)
         y = pd.DataFrame(y) if y is not None else None
 
@@ -255,12 +271,12 @@ class ScoreEvaluator(Evaluator):
         Parameters
         ----------
         evaluation : Optional[ScoreEvaluation], by default None
-            ScoreEvaluation object to convert. Otherwise extract this object's stored scores.
+            ScoreEvaluation dictionary to convert. Otherwise extract this object's stored scores.
 
         Returns
         -------
         dfscores: pd.DataFrame
-            ScoreEvaluation as a dataframe
+            ScoreEvaluation dictionary as a dataframe
         """
         evaluation = super().get_results(evaluation, **kwargs)
         dfscores = pd.DataFrame(evaluation) if evaluation is not None else None
@@ -270,7 +286,7 @@ class ScoreEvaluator(Evaluator):
 class BinaryTreatmentEffect(Evaluator):
     """Estimate average BTE, using estimator to generate counterfactuals.
 
-    NOTE: This assumes SUTVA holds.
+    NOTE: This assumes `SUTVA <https://en.wikipedia.org/wiki/Rubin_causal_model#Stable_unit_treatment_value_assumption_(SUTVA)>`_ holds.
 
     Parameters
     ----------
@@ -298,10 +314,31 @@ class BinaryTreatmentEffect(Evaluator):
         self.treatment_val = treatment_val
         self.control_val = control_val
 
-    def prepare(self, estimator, X, y, random_state=None):
-        """Prepare the evaluator with model and data information.
+    def prepare(self,
+                estimator : Estimator,
+                X: npt.ArrayLike,
+                y: Optional[npt.ArrayLike] = None,
+                random_state: RandomStateType = None) -> None:
+        """
+        Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+         Optional[Union[int, np.random.RandomState]], optional
+            Random state, by default RandomStateType
+
+        Parameters
+        ----------
+        estimator : Estimator
+            Estimator to evaluate
+        X : npt.ArrayLike
+            Features from which to extract treatment column. Shape (n_features, n_rows)
+        y : Optional[npt.ArrayLike], optional
+            Unused targets, by default None.
+        random_state : RandomStateType, optional
+            Unused random state, by default None
         """
         setT = set(get_column(X, self.treatment_column))
 
@@ -312,10 +349,24 @@ class BinaryTreatmentEffect(Evaluator):
             raise ValueError(f"Treatment value {self.control_val} not in "
                              "treatment column")
 
-    def evaluate(self, estimator, X, y=None) -> BTEEvaluation:
+    def evaluate(self, estimator: Estimator, X: npt.ArrayLike, y: Optional[npt.ArrayLike]=None) -> BTEEvaluation:
         """Estimate the binary treatment effect on input data. Returns a singleton list.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        BTEEvaluation
+            Estimated binary treatment effect of treatment on y for each row
         """
         # Copy covariates so we can manipulate the treatment
         Xc = X.copy()
@@ -334,17 +385,30 @@ class BinaryTreatmentEffect(Evaluator):
         return [ate]
 
     def aggregate(self, evaluations: Sequence[BTEEvaluation]) -> BTEEvaluation:
-        """Aggregate a sequence of BTEEvaluations to a single BTEEvaluation."""
-        return _flatten(evaluations)
-
-    def get_results(self, evaluation=None, ci_probs=(0.025, 0.975)):
-        """Get the statistics of the ATE.
+        """Aggregate a sequence of BTEEvaluations to a single BTEEvaluation.
 
         Parameters
         ----------
-        ci_probs: tuple (optional)
-            A sequence of confidence intervals/quantiles to compute from the
-            ATE samples. These must be in [0, 1].
+        evaluations : Sequence[BTEEvaluation]
+
+        Returns
+        -------
+        BTEEvaluation
+        """
+        return _flatten(evaluations)
+
+    def get_results(self,
+                    evaluation: Optional[BTEEvaluation] = None,
+                    ci_probs: Optional[Sequence[float]] = (0.025, 0.975)):
+        """Get the statistics of the average Binary Treatment Effect.
+
+        Parameters
+        ----------
+        evaluation: Optional[BTEEvalaution]
+          Binary treatment effects
+        ci_probs: Optional[Sequence[float]]
+            Tuple of confidence intervals/quantiles to compute from the
+            ATE samples. These must be in [0, 1]. Default (0.025, 0.975)
 
         Returns
         -------
