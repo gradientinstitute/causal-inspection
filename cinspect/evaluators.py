@@ -6,8 +6,8 @@ import functools
 import logging
 import operator
 from collections import defaultdict
-from typing import (Any, Callable, Dict, List, Optional, Sequence, TypeVar,
-                    Union)
+from typing import (Any, Callable, Dict, List, Optional, Sequence, Tuple,
+                    TypeVar, Union)
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -326,13 +326,8 @@ class BinaryTreatmentEffect(Evaluator):
 
         Parameters
         ----------
-         Optional[Union[int, np.random.RandomState]], optional
-            Random state, by default RandomStateType
-
-        Parameters
-        ----------
         estimator : Estimator
-            Estimator to evaluate
+            Estimator to evaluate. Currently unused
         X : npt.ArrayLike
             Features from which to extract treatment column. Shape (n_features, n_rows)
         y : Optional[npt.ArrayLike], optional
@@ -349,7 +344,10 @@ class BinaryTreatmentEffect(Evaluator):
             raise ValueError(f"Treatment value {self.control_val} not in "
                              "treatment column")
 
-    def evaluate(self, estimator: Estimator, X: npt.ArrayLike, y: Optional[npt.ArrayLike]=None) -> BTEEvaluation:
+    def evaluate(self,
+                 estimator: Estimator,
+                 X: npt.ArrayLike,
+                 y: Optional[npt.ArrayLike] = None) -> BTEEvaluation:
         """Estimate the binary treatment effect on input data. Returns a singleton list.
 
         This is called by a model evaluation function in model_evaluation.
@@ -361,7 +359,7 @@ class BinaryTreatmentEffect(Evaluator):
         X : npt.ArrayLike
             Features, of shape (n_samples, n_features)
         y : Optional[npt.ArrayLike], optional
-            Optional targets, of shape (n_samples, n_targets), by default None
+            Unused targets, of shape (n_samples, n_targets), by default None
 
         Returns
         -------
@@ -397,9 +395,11 @@ class BinaryTreatmentEffect(Evaluator):
         """
         return _flatten(evaluations)
 
-    def get_results(self,
-                    evaluation: Optional[BTEEvaluation] = None,
-                    ci_probs: Optional[Sequence[float]] = (0.025, 0.975)):
+    def get_results(
+            self,
+            evaluation: Optional[BTEEvaluation] = None,
+            ci_probs: Optional[Sequence[float]] = (0.025, 0.975)
+     ) -> Tuple[float, np.ma.MaskedArray]:
         """Get the statistics of the average Binary Treatment Effect.
 
         Parameters
@@ -414,8 +414,8 @@ class BinaryTreatmentEffect(Evaluator):
         -------
         mean_ate: float
             The mean of the ATE samples.
-        *ci_levels: sequence
-            A sequence of confidence interval levels as specified by
+        ci_levels: np.ma.MaskedArray
+            An array of confidence interval levels as specified by
             `ci_probs`.
         """
         evaluation = super().get_results(evaluation)
@@ -425,7 +425,7 @@ class BinaryTreatmentEffect(Evaluator):
         ate_samples = evaluation
         mean_ate = np.mean(ate_samples)
         ci_levels = mquantiles(ate_samples, ci_probs)
-        return mean_ate, *ci_levels
+        return mean_ate, ci_levels
 
 
 class PartialDependanceEvaluator(Evaluator):
