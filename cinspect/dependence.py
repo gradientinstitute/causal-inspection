@@ -219,7 +219,7 @@ def plot_partial_dependence_density(
     Returns
     -------
     bins: : np.ndarray
-        The edges of the bins. Length nbins + 1 (nbins left edges and right edge of last bin). 
+        The edges of the bins. Length nbins + 1 (nbins left edges and right edge of last bin).
         Always a single array even when multiple data sets are passed in.
 
     n : Union[np.ndarray, List[np.ndarray]]]
@@ -232,7 +232,6 @@ def plot_partial_dependence_density(
         even if no weighting or normalization is used.
 
     """
-
     # plot the distribution for of the variable on the second axis
     if categorical:
         x = np.arange(len(grid))
