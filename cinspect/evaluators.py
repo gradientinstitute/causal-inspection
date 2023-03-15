@@ -358,7 +358,7 @@ class BinaryTreatmentEffect(Evaluator):
             An sklearn estimator
         X : npt.ArrayLike
             Features, of shape (n_samples, n_features)
-        y : Optional[npt.ArrayLike], optional
+        y : npt.ArrayLike, optional
             Unused targets, of shape (n_samples, n_targets), by default None
 
         Returns
@@ -431,20 +431,22 @@ class BinaryTreatmentEffect(Evaluator):
 class PartialDependanceEvaluator(Evaluator):
     """Partial dependence plot evaluator.
 
+    The partial dependence evaluation is a dictionary from feature names
+    to a list of estimated partial dependences.
     Parameters
     ----------
-    mode: str
-        The mode for the plots
-
-    end_transform_indx: (optional) int
-        compute dependence with respect to this point of the pipeline onwards.
-
-    feature_grid: (optional) dict{str:grid}
+    feature_grids: (optional) Dict[str, npt.ArrayLike], by default None
         Map from feature_name to grid of values for that feature.
         If set, dependence will only be computed for specified features.
 
-    conditional_filter: (optional) callable
+    conditional_filter:
+    (optional) Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]]
         Used to filter X and y before computing dependence
+        Takes X,y, produces new X,y
+        by default None: no filter
+    end_transform_indx: (optional) int
+        compute dependence with respect to this point of the pipeline onwards.
+        TODO dive deep, write example
     """
 
     PDEvaluation = Dict[str, List[npt.ArrayLike]]
@@ -452,18 +454,35 @@ class PartialDependanceEvaluator(Evaluator):
     def __init__(
         self,
         feature_grids=None,
-        conditional_filter=None,
-        end_transform_indx=None,
+        conditional_filter : Optional[Callable[[npt.ArrayLike, npt.ArrayLike],
+                                               Tuple[npt.ArrayLike, npt.ArrayLike]]]
+        = None,
+        end_transform_indx : Optional[int] = None,
     ):
-        """Construct a PartialDependanceEvaluator."""
         self.feature_grids = feature_grids
         self.conditional_filter = conditional_filter
         self.end_transform_indx = end_transform_indx
 
-    def prepare(self, estimator, X, y, random_state=None):
-        """Prepare the evaluator with model and data information.
+    def prepare(self,
+                estimator : Estimator,
+                X: npt.ArrayLike,
+                y: Optional[npt.ArrayLike] = None,
+                random_state: RandomStateType = None) -> None:
+        """
+        Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            Estimator to evaluate
+        X : npt.ArrayLike
+            Features from which to extract treatment column. Shape (n_features, n_rows)
+        y : npt.ArrayLike, optional
+            Targets, by default None.
+        random_state : RandomStateType, optional
+            Unused random state, by default None
         """
         # random_state = check_random_state(random_state)
         if self.end_transform_indx is not None:
@@ -486,10 +505,28 @@ class PartialDependanceEvaluator(Evaluator):
 
         self.dep_params = dep_params
 
-    def evaluate(self, estimator, X, y=None):  # called on the fit estimator
-        """Evaluate the fitted estimator with input data.
+    def evaluate(self,
+                 estimator: Estimator,
+                 X: npt.ArrayLike,
+                 y: Optional[npt.ArrayLike] = None) -> PDEvaluation:  # called on the fit estimator
+        
+        """Estimate the Partial Dependence from input data.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike]
+            targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        PDEvaluation
+            Estimated Partial Dependence dictionary
         """
         if self.end_transform_indx is not None:
             transformer = estimator[0 : self.end_transform_indx]
