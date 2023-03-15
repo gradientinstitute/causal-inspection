@@ -68,7 +68,8 @@ class Evaluator:
         estimator : Estimator
             Estimator to evaluate
         X : npt.ArrayLike
-            Features used for preparation (sub-class dependent semantics). Shape (n_features, n_rows)
+            Features used for preparation (sub-class dependent semantics).
+            Shape (n_features, n_rows)
         y : Optional[npt.ArrayLike], optional
             Optional targets used for preparation, of shape (n_samples, n_targets), by default None.
         random_state : RandomStateType, optional
@@ -181,7 +182,7 @@ class Evaluator:
 
 
 class ScoreEvaluator(Evaluator):
-    """    
+    """
     Score an estimator on test data.
 
     This emulates scikit-learn's cross_validate functionality.
@@ -242,7 +243,6 @@ class ScoreEvaluator(Evaluator):
         evaluation: ScoreEvaluation
             Dictionary of scores
         """
-       
         X = pd.DataFrame(X)
         y = pd.DataFrame(y) if y is not None else None
 
@@ -286,7 +286,7 @@ class ScoreEvaluator(Evaluator):
 class BinaryTreatmentEffect(Evaluator):
     """Estimate average BTE, using estimator to generate counterfactuals.
 
-    NOTE: This assumes `SUTVA <https://en.wikipedia.org/wiki/Rubin_causal_model#Stable_unit_treatment_value_assumption_(SUTVA)>`_ holds.
+    NOTE: This assumes `SUTVA <https://en.wikipedia.org/wiki/Rubin_causal_model#Stable_unit_treatment_value_assumption_(SUTVA)>`_ holds. # noqa
 
     Parameters
     ----------
@@ -429,24 +429,11 @@ class BinaryTreatmentEffect(Evaluator):
 
 
 class PartialDependanceEvaluator(Evaluator):
-    """Partial dependence plot evaluator.
+    """
+    Partial dependence plot evaluator.
 
     The partial dependence evaluation is a dictionary from feature names
-    to a list of estimated partial dependences.
-    Parameters
-    ----------
-    feature_grids: (optional) Dict[str, npt.ArrayLike], by default None
-        Map from feature_name to grid of values for that feature.
-        If set, dependence will only be computed for specified features.
-
-    conditional_filter:
-    (optional) Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]]
-        Used to filter X and y before computing dependence
-        Takes X,y, produces new X,y
-        by default None: no filter
-    end_transform_indx: (optional) int
-        compute dependence with respect to this point of the pipeline onwards.
-        TODO dive deep, write example
+    to a list of estimated partial dependence.
     """
 
     PDEvaluation = Dict[str, List[npt.ArrayLike]]
@@ -459,6 +446,26 @@ class PartialDependanceEvaluator(Evaluator):
         = None,
         end_transform_indx : Optional[int] = None,
     ):
+        """Partial dependence plot evaluator.
+
+        The partial dependence evaluation is a dictionary from feature names
+        to a list of estimated partial dependence.
+
+        Parameters
+        ----------
+        feature_grids: (optional) Dict[str, npt.ArrayLike], by default None
+            Map from feature_name to grid of values for that feature.
+            If set, dependence will only be computed for specified features.
+
+        conditional_filter:
+        (optional) Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]]
+            Used to filter X and y before computing dependence
+            Takes X,y, produces new X,y
+            by default None: no filter
+        end_transform_indx: (optional) int
+            compute dependence with respect to this point of the pipeline onwards.
+            TODO dive deep, write example
+        """
         self.feature_grids = feature_grids
         self.conditional_filter = conditional_filter
         self.end_transform_indx = end_transform_indx
@@ -509,7 +516,6 @@ class PartialDependanceEvaluator(Evaluator):
                  estimator: Estimator,
                  X: npt.ArrayLike,
                  y: Optional[npt.ArrayLike] = None) -> PDEvaluation:  # called on the fit estimator
-        
         """Estimate the Partial Dependence from input data.
 
         This is called by a model evaluation function in model_evaluation.
@@ -527,6 +533,11 @@ class PartialDependanceEvaluator(Evaluator):
         -------
         PDEvaluation
             Estimated Partial Dependence dictionary
+
+        Raises
+        ------
+        RuntimeError
+            If an expected feature is not present in X
         """
         if self.end_transform_indx is not None:
             transformer = estimator[0 : self.end_transform_indx]
