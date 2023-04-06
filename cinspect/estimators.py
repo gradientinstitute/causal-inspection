@@ -2,12 +2,12 @@
 # Licensed under the Apache 2.0 License.
 """Convenience estimators for causal estimation."""
 
-from typing import NamedTuple, Union
+from typing import Any, NamedTuple, Optional, Union  # , Self
 
 import numpy as np
-
+import numpy.typing as npt
 from scipy import linalg, stats
-from sklearn.base import BaseEstimator, RegressorMixin, clone, check_X_y
+from sklearn.base import BaseEstimator, RegressorMixin, check_X_y, clone
 from sklearn.linear_model import BayesianRidge, LinearRegression
 from sklearn.utils.validation import check_is_fitted
 
@@ -16,6 +16,9 @@ from cinspect.utils import get_column
 
 class RegressionStatisticalResults(NamedTuple):
     """Statistical results object for linear regressors.
+
+    TODO should this be private? Only used internally
+    TODO sphinx parses attributes directly
 
     Attributes
     ----------
@@ -55,8 +58,18 @@ class RegressionStatisticalResults(NamedTuple):
 
 
 class _StatMixin:
-    def model_statistics(self):
-        """Get the coefficient statistics for this estimator."""
+    """Mixin to get linear coefficient statistics for an estimator."""
+
+    def model_statistics(self) -> RegressionStatisticalResults:
+        """
+        Get the linear coefficient statistics for this estimator.
+
+        Returns
+        -------
+        RegressionStatisticalResults
+            Linear coefficient statistics for this estimator.
+        """
+        # TODO should we not check that dof_, t_ p_ are fitted as well?
         check_is_fitted(self, attributes=["coef_", "coef_se_"])
         stats = RegressionStatisticalResults(
             beta=self.coef_,
@@ -74,7 +87,20 @@ class LinearRegressionStat(LinearRegression, _StatMixin):
     def fit(self, X, y, sample_weight=None):
         """Fit linear regression model to data.
 
-        TODO: complete docstring
+        Parameters
+        ----------
+        X : npt.ArrayLike
+            Training features, of shape (n_samples, n_features)
+            TODO I believe ArrayLike includes dataframes: verify
+        y : npt.ArrayLike
+            Training targets, of shape (n_samples, n_targets)
+        sample_weight : npt.ArrayLike, optional
+            Weights for each sample, of shape (n_samples, ), by default None
+
+        Returns
+        -------
+        self : LinearRegressionStat
+            The fitted object
         """
         super().fit(X, y, sample_weight)
         X, y = check_X_y(X, y)
@@ -95,7 +121,19 @@ class BayesianRidgeStat(BayesianRidge, _StatMixin):
     def fit(self, X, y, sample_weight=None):
         """Fit bayesian ridge estimator to data.
 
-        TODO: complete docstring
+        Parameters
+        ----------
+        X : npt.ArrayLike
+            Training features, of shape (n_samples, n_features).
+        y : npt.ArrayLike
+            Training targets, of shape (n_samples, n_targets)
+        sample_weight : npt.ArrayLike, optional
+            Weights for each sample, of shape (n_samples, ), by default None
+
+        Returns
+        -------
+        self : BayesianRegressionStat
+            The fitted object
         """
         super().fit(X, y, sample_weight)
         X, y = check_X_y(X, y)
@@ -118,24 +156,29 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
     depending on the value of the treatment.
 
     NOTE: This can be used in conjunction with the
-    `evaluators.BinaryTreatmentEffect` evaluator to obtain statistics of a
+    :class:`cinspect.evaluators.BinaryTreatmentEffect` evaluator to obtain statistics of a
     binary treatment.
 
     Parameters
     ----------
-    estimator: scikit learn compatible estimator
-        TODO
-    treatment_column: str or int
-        TODO
-    treatment_val: any
-        TODO
+    estimator : BaseEstimator
+        scikit learn compatible estimator,
+        from which separate treatment and control estimators will be generated
+        TODO perhaps allow separate estimators for treatment and control;
+    treatment_column: Union[str, int]
+        Treatment column index
+        TODO: str only if it's a dataframe
+    treatment_val: Optional[Any], default 1
+        Constant value of treatment column
+        which denotes that the current row is in the treatment cohort
+        TODO example
     """
 
     def __init__(
         self,
-        estimator,
-        treatment_column,
-        treatment_val=1,
+        estimator : BaseEstimator,
+        treatment_column : Union[str, int],
+        treatment_val : Optional[Any] = 1,
     ):
         """Construct a new instance of a BinaryTreatmentRegressor."""
         self.estimator = estimator
@@ -148,9 +191,9 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         Parameters
         ----------
         X: ndarray or DataFrame
-            TODO
+            Training features, of shape (n_samples, n_features)
         y: ndarray or DataFrame
-            TODO
+            Training targets, of shape (n_samples, n_targets)
         groups: ndarray, optional
             Group labels for the samples used while splitting the dataset into
             train/test set. Only used in conjunction with a parameter search
@@ -175,8 +218,20 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         self.c_estimator_.fit(Xc, yc)
         return self
 
-    def predict(self, X):
-        """Predict the outcomes."""
+    def predict(self, X: npt.ArrayLike) -> np.ndarray:
+        """
+        Predict the outcomes, choosing the estimator based on the value of treatment column.
+
+        Parameters
+        ----------
+        X : npt.ArrayLike
+            Features, of shape (n_prediction_samples, n_features)
+
+        Returns
+        -------
+        y : np.ndarray
+            Predicted outcomes, of shape (n_prediction_samples, n_targets)
+        """
         check_is_fitted(self, attributes=["t_estimator_", "c_estimator_"])
         Xt, Xc, t_mask = _treatment_split(X, self.treatment_column, self.treatment_val)
         Ey = np.zeros(len(X))
@@ -188,16 +243,57 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         return Ey
 
     def get_params(self, deep: bool = True) -> dict:
-        """Get this estimator's initialisation parameters."""
+        """
+        Get parameters for this estimator.
+
+        This is a method of :class:`~sklearn.base.BaseEstimator`.
+
+        TODO make deep argument functional.
+        I believe this implementation could be replaced with the class's default implementation
+
+        Parameters
+        ----------
+        deep : bool, optional
+            If True, will return the parameters for this estimator and contained subobjects
+            that are estimators.
+            By default True
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
             "estimator": self.estimator,
             "treatment_column": self.treatment_column,
             "treatment_val": self.treatment_val,
         }
 
-    def set_params(self, **parameters: dict):
-        """Set this estimator's initialisation parameters."""
-        for parameter, value in parameters.items():
+    def set_params(self, **params: dict) -> Any:  # TODO use Self: PEP 673, Python 3.11
+        """
+        Set the parameters of this estimator.
+
+        This is a method of :class:`~sklearn.base.BaseEstimator`.
+
+        TODO satisfy the following:
+
+        The method works on simple estimators as well as on nested objects (such as Pipeline).
+        The latter have parameters of the form <component>__<parameter>
+        so that it's possible to update each component of a nested object.
+
+        TODO I believe this could be replaced with the base class's implementation
+
+        Parameters
+        ----------
+        **params : dict
+            BinaryTreatmentRegressor parameters.
+
+        Returns
+        -------
+        self: BinaryTreatmentRegressor
+            BinaryTreatmentRegressor instance.
+        """
+        for parameter, value in params.items():
             setattr(self, parameter, value)
         return self
 

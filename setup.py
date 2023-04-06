@@ -63,6 +63,7 @@ setup(
     ],
     extras_require={
         "dev": [
+            "sphinx",
             "pytest",
             "pytest-mock",
             "flake8-bugbear",

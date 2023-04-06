@@ -6,7 +6,8 @@ import functools
 import logging
 import operator
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Sequence, TypeVar, Union
+from typing import (Any, Callable, Dict, List, Optional, Sequence, Tuple,
+                    TypeVar, Union)
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -22,36 +23,121 @@ from cinspect.utils import get_column
 
 LOG = logging.getLogger(__name__)
 
-Evaluation = TypeVar("Evaluation")
+# TODO sphinx documentation of custom types/type aliases
+Estimator = TypeVar("Estimator")  # intention is an sklearn estimator
+
+# random states as per sklearn
+# https://scikit-learn.org/dev/glossary.html#term-random_state
+# TODO sphinx documentation
+RandomStateType = Optional[Union[int, np.random.RandomState]]
 
 
 class Evaluator:
-    """Abstract class for Evaluators to inherit from."""
+    """Abstract class for Evaluators to inherit from.
 
-    def prepare(self, estimator, X, y=None, random_state=None):
-        """Prepare the evaluator with model and data information.
+    Each subclass should have an associated Evaluation type.
+    This should be a monoid, where :method:`Evaluator.aggregate` is the monoid operation.
+
+    Internal state should be this Evaluation; should be initialised with the Monoidal identity
+
+    TODO: should we reunify Evaluator and Evaluation?
+    Mostly... Evaluator holds metadata for its Evaluation.
+    Liskov substitution principle suggests that subtypes should be swappable;
+    this is not currently true because we can't enforce the behaviour of the objects' consumers
+    """
+
+    Evaluation = TypeVar("Evaluation")
+
+    def prepare(self,
+                estimator : Estimator,
+                X: npt.ArrayLike,
+                y: Optional[npt.ArrayLike] = None,
+                random_state: RandomStateType = None) -> None:
+        """
+        Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+         Optional[Union[int, np.random.RandomState]], optional
+            Random state, by default RandomStateType
+
+        Parameters
+        ----------
+        estimator : Estimator
+            Estimator to evaluate
+        X : npt.ArrayLike
+            Features used for preparation (sub-class dependent semantics).
+            Shape (n_features, n_rows)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets used for preparation, of shape (n_samples, n_targets), by default None.
+        random_state : RandomStateType, optional
+            Random state, by default None
         """
         pass
 
-    def evaluate(self, estimator, X, y=None) -> Evaluation:
-        """Evaluate the fitted estimator with test, training or all data.
+    def evaluate(self,
+                 estimator : Estimator,
+                 X: npt.ArrayLike,
+                 y : Optional[npt.ArrayLike] = None) -> Evaluation:
+        """
+        Evaluate the fitted estimator with test, training or all data.
 
         Subclasses should ensure that this is a pure function.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        Evaluation
+            A subclass-specific evaluation object
         """
         pass
 
     def aggregate(self, evaluations: Sequence[Evaluation]) -> Evaluation:
-        """Aggregate the evaluation results.
+        """
+        Aggregate the evaluation results.
 
-        This is called by a model evaluation function in model_evaluation.
+        This is called by a model evaluation function in model_evaluation,
+        and is crucial for parallelisation.
+
+        Evaluation should be a monoid with respect to this operation for sane behaviour:
+          - identity:
+            - aggregate([]) == unit
+            - aggregate( [unit] + evals ) == aggregate(evals) == aggregate(evals + [unit])
+          - associative:
+            - aggregate(aggregate([a]), aggregate([b,c])
+              == aggregate([a,b,c])
+              == aggregate(aggregate([a,b ]), aggregate([c])
+
+        TODO examples
+        e.g. Evaluation could be a list of statistics, could be (mean, count) of a statistic,
+        could be combinable graphic
+
+
+        Parameters
+        ----------
+        evaluations : Sequence[Evaluation]
+            A collection of evaluations
+
+        Returns
+        -------
+        Evaluation
+            The combination of these evaluations
         """
         pass
 
-    def set_evaluation(self, evaluation: Evaluation):
+    def set_evaluation(self, evaluation: Evaluation) -> None:
         """Setter; sets this object's evaluation.
 
         Subclasses should ensure that this and self.prepare(..)
@@ -60,46 +146,70 @@ class Evaluator:
 
         Parameters
         ----------
-        evaluation:Evaluation
+        evaluation: Evaluation
             The new internal evaluation.
         """
         self.evaluation = evaluation
 
     def get_results(
-        self, evaluation: Optional[Evaluation] = None, **kwargs
-    ) -> Optional[Any]:
+        self, evaluation: Optional[Evaluation] = None, **kwargs : Any
+    ) -> Any:
         """View the evaluator's results.
 
-        Default implementation returns the given evaluation/the stored
-        evaluation. but this may be overridden if there is a canonical
+        Default implementation returns the given Evaluation/the stored
+        Evaluation. but this may be overridden if there is a canonical
         representation of the results that differs from the results' internal
-        representation.
+        representation as an Evaluation.
 
         This could be a pandas dataframe, a matplotlib figure, etc.
+
+        Parameters
+        ----------
+        evaluation : Evaluation, optional
+            The evaluation to convert, by default None
+
+        Returns
+        -------
+        Any
+            _description_
         """
-        evaluation = (
-            evaluation
-            if evaluation is not None
-            else (self.evaluation if hasattr(self, "evaluation") else None)
-        )
+        if evaluation is None and hasattr(self, "evaluation"):
+            evaluation = self.evaluation
+        else:
+            raise Exception("No given/stored Evaluation")
+
         return evaluation
 
 
 class ScoreEvaluator(Evaluator):
-    """Score an estimator on test data.
+    """
+    Score an estimator on test data.
 
     This emulates scikit-learn's cross_validate functionality.
 
     Parameters
     ----------
-    scorers: list[str|scorer]
-        List of scorers to compute
+    scorers: list[str|Scorer]
+        List of scorers/scorer names to compute.
+        Names -> scorer correspondence dictated by `sklearn.metrics.get_scorer`
     groupby: (optional) str or list[str]
         List or string indicating that scores should be calculated
-        separately within groups defined by this variable.
+        separately within groups defined by this/these variables.
+        TODO: this is currently implemented implicitly using pandas
     """
 
-    def __init__(self, scorers, groupby=None):
+    # I'm trying to encode that this should be a scalar
+    Score = TypeVar("Score")
+
+    # TODO sphinx documentation of custom types
+    # an sklearn Scorer takes an estimator, X and optional y, and returns a scalar score
+    # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.make_scorer.html#sklearn.metrics.make_scorer
+    Scorer = Callable[[Estimator, Optional[npt.ArrayLike]], Score]
+    ScoreEvaluation = Dict[str, List[Score]]
+
+    def __init__(self,
+                 scorers: List[Union[str, Scorer]],
+                 groupby : Optional[Union[str, List[str]]] = None):
         """Initialise a ScoreEvaluator object."""
         self.scorers = {}  # map from name to scorer
         for s in scorers:
@@ -109,18 +219,39 @@ class ScoreEvaluator(Evaluator):
                 self.scorers[str(s)] = s
 
         self.groupby = groupby
-        self.scores = defaultdict(list)
+        self.scores : Dict[str, self.Score] = defaultdict(list)
 
-    def evaluate(self, estimator, X, y):
-        """Evaluate the fitted estimator with data.
+    def evaluate(self,
+                 estimator: Estimator,
+                 X: npt.ArrayLike,
+                 y: Optional[npt.ArrayLike]) -> ScoreEvaluation:
+        """Score the fitted estimator with data.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike], optional
+            Optional targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        evaluation: ScoreEvaluation
+            Dictionary of scores
         """
+        X = pd.DataFrame(X)
+        y = pd.DataFrame(y) if y is not None else None
+
         scores = defaultdict(list)
         if self.groupby is not None:
+            # TODO: this makes X/y implicitly a dataframe. Is this intended?
             groups = X.groupby(self.groupby)
             for group_key, Xs in groups:
-                ys = y[Xs.index]
+                ys = y[Xs.index]  # TODO currently there is an error if y is None
                 scores["group"].append(group_key)
                 for s_name, s in self.scorers.items():
                     scores[s_name].append(s(estimator, Xs, ys))
@@ -128,11 +259,26 @@ class ScoreEvaluator(Evaluator):
         else:
             for s_name, s in self.scorers.items():
                 scores[s_name].append(s(estimator, X, y))
+        self.evaluation = scores
         return scores
 
-    def get_results(self, evaluation, **kwargs):
-        """Get the scores of the estimator."""
-        evaluation = evaluation if evaluation is not None else self.evaluation
+    def get_results(self,
+                    evaluation : Optional[ScoreEvaluation] = None,
+                    **kwargs: List[Any]) -> pd.DataFrame:
+        """
+        Get the scores of the estimator.
+
+        Parameters
+        ----------
+        evaluation : Optional[ScoreEvaluation], by default None
+            ScoreEvaluation dictionary to convert. Otherwise extract this object's stored scores.
+
+        Returns
+        -------
+        dfscores: pd.DataFrame
+            ScoreEvaluation dictionary as a dataframe
+        """
+        evaluation = super().get_results(evaluation, **kwargs)
         dfscores = pd.DataFrame(evaluation) if evaluation is not None else None
         return dfscores
 
@@ -140,9 +286,21 @@ class ScoreEvaluator(Evaluator):
 class BinaryTreatmentEffect(Evaluator):
     """Estimate average BTE, using estimator to generate counterfactuals.
 
-    NOTE: This assumes SUTVA holds.
+    NOTE: This assumes `SUTVA <https://en.wikipedia.org/wiki/Rubin_causal_model#Stable_unit_treatment_value_assumption_(SUTVA)>`_ holds. # noqa
+
+    Parameters
+    ----------
+    treatment_column: Union[str, int]
+        Treatment variable's column index
+    treatment_val: Any, optional
+        Value of treatment variable when "treated" , by default 1
+    control_val: Any, optional
+        Value of treatment variable when "untreated", by default 0
+    evaluate_mode: str, optional
+        Evaluation mode; "train"/"test"/"all", by default "all"
     """
 
+    # type of the Evaluation produced
     BTEEvaluation = List[float]
 
     def __init__(
@@ -151,27 +309,31 @@ class BinaryTreatmentEffect(Evaluator):
         treatment_val: Any = 1,
         control_val: Any = 0,
     ):
-        """Construct BTE estimator.
-
-        Parameters
-        ----------
-        treatment_column:Union[str, int]
-            Treatment variable's column index
-        treatment_val:Any, optional
-            Value of treatment variable when "treated" , by default 1
-        control_val:Any, optional
-            Value of treatment variable when "untreated", by default 0
-        evaluate_mode:str, optional
-            Evaluation mode; "train"/"test"/"all", by default "all"
-        """
+        """Construct a BTEvaluation object."""
         self.treatment_column = treatment_column
         self.treatment_val = treatment_val
         self.control_val = control_val
 
-    def prepare(self, estimator, X, y, random_state=None):
-        """Prepare the evaluator with model and data information.
+    def prepare(self,
+                estimator : Estimator,
+                X: npt.ArrayLike,
+                y: Optional[npt.ArrayLike] = None,
+                random_state: RandomStateType = None) -> None:
+        """
+        Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            Estimator to evaluate. Currently unused
+        X : npt.ArrayLike
+            Features from which to extract treatment column. Shape (n_features, n_rows)
+        y : Optional[npt.ArrayLike], optional
+            Unused targets, by default None.
+        random_state : RandomStateType, optional
+            Unused random state, by default None
         """
         setT = set(get_column(X, self.treatment_column))
 
@@ -182,10 +344,27 @@ class BinaryTreatmentEffect(Evaluator):
             raise ValueError(f"Treatment value {self.control_val} not in "
                              "treatment column")
 
-    def evaluate(self, estimator, X, y=None) -> BTEEvaluation:
+    def evaluate(self,
+                 estimator: Estimator,
+                 X: npt.ArrayLike,
+                 y: Optional[npt.ArrayLike] = None) -> BTEEvaluation:
         """Estimate the binary treatment effect on input data. Returns a singleton list.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : npt.ArrayLike, optional
+            Unused targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        BTEEvaluation
+            Estimated binary treatment effect of treatment on y for each row
         """
         # Copy covariates so we can manipulate the treatment
         Xc = X.copy()
@@ -204,24 +383,39 @@ class BinaryTreatmentEffect(Evaluator):
         return [ate]
 
     def aggregate(self, evaluations: Sequence[BTEEvaluation]) -> BTEEvaluation:
-        """Aggregate a sequence of BTEEvaluations to a single BTEEvaluation."""
-        return _flatten(evaluations)
-
-    def get_results(self, evaluation=None, ci_probs=(0.025, 0.975)):
-        """Get the statistics of the ATE.
+        """Aggregate a sequence of BTEEvaluations to a single BTEEvaluation.
 
         Parameters
         ----------
-        ci_probs: tuple (optional)
-            A sequence of confidence intervals/quantiles to compute from the
-            ATE samples. These must be in [0, 1].
+        evaluations : Sequence[BTEEvaluation]
+
+        Returns
+        -------
+        BTEEvaluation
+        """
+        return _flatten(evaluations)
+
+    def get_results(
+            self,
+            evaluation: Optional[BTEEvaluation] = None,
+            ci_probs: Optional[Sequence[float]] = (0.025, 0.975)
+     ) -> Tuple[float, np.ma.MaskedArray]:
+        """Get the statistics of the average Binary Treatment Effect.
+
+        Parameters
+        ----------
+        evaluation: Optional[BTEEvalaution]
+          Binary treatment effects
+        ci_probs: Optional[Sequence[float]]
+            Tuple of confidence intervals/quantiles to compute from the
+            ATE samples. These must be in [0, 1]. Default (0.025, 0.975)
 
         Returns
         -------
         mean_ate: float
             The mean of the ATE samples.
-        *ci_levels: sequence
-            A sequence of confidence interval levels as specified by
+        ci_levels: np.ma.MaskedArray
+            An array of confidence interval levels as specified by
             `ci_probs`.
         """
         evaluation = super().get_results(evaluation)
@@ -231,26 +425,15 @@ class BinaryTreatmentEffect(Evaluator):
         ate_samples = evaluation
         mean_ate = np.mean(ate_samples)
         ci_levels = mquantiles(ate_samples, ci_probs)
-        return mean_ate, *ci_levels
+        return mean_ate, ci_levels
 
 
 class PartialDependanceEvaluator(Evaluator):
-    """Partial dependence plot evaluator.
+    """
+    Partial dependence plot evaluator.
 
-    Parameters
-    ----------
-    mode: str
-        The mode for the plots
-
-    end_transform_indx: (optional) int
-        compute dependence with respect to this point of the pipeline onwards.
-
-    feature_grid: (optional) dict{str:grid}
-        Map from feature_name to grid of values for that feature.
-        If set, dependence will only be computed for specified features.
-
-    conditional_filter: (optional) callable
-        Used to filter X and y before computing dependence
+    The partial dependence evaluation is a dictionary from feature names
+    to a list of estimated partial dependence.
     """
 
     PDEvaluation = Dict[str, List[npt.ArrayLike]]
@@ -258,18 +441,55 @@ class PartialDependanceEvaluator(Evaluator):
     def __init__(
         self,
         feature_grids=None,
-        conditional_filter=None,
-        end_transform_indx=None,
+        conditional_filter : Optional[Callable[[npt.ArrayLike, npt.ArrayLike],
+                                               Tuple[npt.ArrayLike, npt.ArrayLike]]]
+        = None,
+        end_transform_indx : Optional[int] = None,
     ):
-        """Construct a PartialDependanceEvaluator."""
+        """Partial dependence plot evaluator.
+
+        The partial dependence evaluation is a dictionary from feature names
+        to a list of estimated partial dependence.
+
+        Parameters
+        ----------
+        feature_grids: (optional) Dict[str, npt.ArrayLike], by default None
+            Map from feature_name to grid of values for that feature.
+            If set, dependence will only be computed for specified features.
+
+        conditional_filter:
+        (optional) Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]]
+            Used to filter X and y before computing dependence
+            Takes X,y, produces new X,y
+            by default None: no filter
+        end_transform_indx: (optional) int
+            compute dependence with respect to this point of the pipeline onwards.
+            TODO dive deep, write example
+        """
         self.feature_grids = feature_grids
         self.conditional_filter = conditional_filter
         self.end_transform_indx = end_transform_indx
 
-    def prepare(self, estimator, X, y, random_state=None):
-        """Prepare the evaluator with model and data information.
+    def prepare(self,
+                estimator : Estimator,
+                X: npt.ArrayLike,
+                y: Optional[npt.ArrayLike] = None,
+                random_state: RandomStateType = None) -> None:
+        """
+        Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            Estimator to evaluate
+        X : npt.ArrayLike
+            Features from which to extract treatment column. Shape (n_features, n_rows)
+        y : npt.ArrayLike, optional
+            Targets, by default None.
+        random_state : RandomStateType, optional
+            Unused random state, by default None
         """
         # random_state = check_random_state(random_state)
         if self.end_transform_indx is not None:
@@ -292,10 +512,32 @@ class PartialDependanceEvaluator(Evaluator):
 
         self.dep_params = dep_params
 
-    def evaluate(self, estimator, X, y=None):  # called on the fit estimator
-        """Evaluate the fitted estimator with input data.
+    def evaluate(self,
+                 estimator: Estimator,
+                 X: npt.ArrayLike,
+                 y: Optional[npt.ArrayLike] = None) -> PDEvaluation:  # called on the fit estimator
+        """Estimate the Partial Dependence from input data.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            An sklearn estimator
+        X : npt.ArrayLike
+            Features, of shape (n_samples, n_features)
+        y : Optional[npt.ArrayLike]
+            targets, of shape (n_samples, n_targets), by default None
+
+        Returns
+        -------
+        PDEvaluation
+            Estimated Partial Dependence dictionary
+
+        Raises
+        ------
+        RuntimeError
+            If an expected feature is not present in X
         """
         if self.end_transform_indx is not None:
             transformer = estimator[0 : self.end_transform_indx]
