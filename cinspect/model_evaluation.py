@@ -45,7 +45,6 @@ def crossval_model(
     A list of evaluators determines what other metrics, such as feature
     importance and partial dependence are computed.
 
-    
     Parameters
     ----------
     estimator : BaseEstimator
@@ -70,7 +69,6 @@ def crossval_model(
         A sequence of evaluated Evaluators (corresponding to the input evaluators)
         and their evaluations.
     """
-
     # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
 
@@ -193,8 +191,11 @@ def bootcross_model(
     use_group_cv: bool = False,
     n_jobs=1,
 ) -> Sequence[Tuple[Evaluator, Any]]:
-    """
-    Use bootstrapping to compute random train/test folds (no sample sharing).
+    """Use bootstrapping to compute random train/test folds (no sample sharing).
+
+    "Bootcross": split into train/test sets
+    then seperately resample these sets (once) with replacement.
+
 
     The input evaluators determines what statistics are computed with the
     crossed bootstrap samples.
@@ -267,9 +268,25 @@ def bootcross_model(
     return evaluators_evaluations
 
 
-def _check_group_estimator(estimator, use_group_cv):
+def _check_group_estimator(estimator : BaseEstimator
+                           , use_group_cv : bool) -> bool:
+    """Perform checks on the estimator and use_group_cv parameter.
+
+    If use_group_cv is True, warn the user if the estimator doesn't support groups.
+    If use_group_cv is False, warn the user if the estimator is a parameter search estimator.
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    use_group_cv : bool
+        Whether or not to use groups in cross validation procedure.
+    Returns
+    -------
+    bool
+        simply passes through `use_group_cv`
+    """
     if use_group_cv:
-        # Check if estimator supports group keyword
+        # Check if estimator supports groups keyword
         spec = inspect.signature(estimator.fit)
         if "groups" not in spec.parameters:
             LOG.warning(
@@ -288,10 +305,36 @@ def _check_group_estimator(estimator, use_group_cv):
     return use_group_cv
 
 
-def _bootcross_split(data_size, test_size, random_state):
+def _bootcross_split(data_size : int
+                     , test_size : int
+                     , random_state : np.random.RandomState
+                     ) -> Tuple[np.ndarray, np.ndarray]:
+    """Split indices for "bootcross".
+
+    Bootcross: split into train/test, then resample these sets (once) with replacement.
+
+    Parameters
+    ----------
+    data_size : int
+        number of samples to split
+    test_size : int
+        number of samples to use for test set
+    random_state : np.random.RandomState
+        random state
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        train indices, test indices
+    """
+    assert test_size > 0 and test_size <= data_size
+
+    # random permutation of range(data_size)
     permind = random_state.permutation(data_size)
+    # split into test and train indices
     test_ind = permind[:test_size]
     train_ind = permind[test_size:]
+    # resample these train/test indices with replacement
     test_boot = resample(test_ind, random_state=random_state)
     train_boot = resample(train_ind, random_state=random_state)
     return train_boot, test_boot
