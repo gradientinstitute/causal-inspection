@@ -22,6 +22,10 @@ from cinspect.utils import get_rows
 
 LOG = logging.getLogger(__name__)
 
+# TODO consolidate return types: there is currently redundancy:
+# we could either return the evaluations (and formalise the index-wise input-output correpondence),
+# or the evaluated evaluations, but probably not both
+
 
 def crossval_model(
     estimator: BaseEstimator,
@@ -30,21 +34,46 @@ def crossval_model(
     evaluators: Sequence[Evaluator],
     cv: Optional[
         Union[int, BaseCrossValidator]
-    ] = None,  # defaults to KFold(n_splits=5)
+    ] = 5,  # defaults to KFold(n_splits=5)
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     stratify: Optional[Union[np.ndarray, pd.Series]] = None,
-    n_jobs=1,
-) -> Sequence[Evaluator]:
+    n_jobs: Optional[int] = 1,
+) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Evaluate a model using cross validation.
 
     A list of evaluators determines what other metrics, such as feature
-    importance and partial dependence are computed
+    importance and partial dependence are computed.
+
+    
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    X : pd.DataFrame
+        The features.
+    y : Union[pd.Series, pd.DataFrame]
+        The target.
+    evaluators : Sequence[Evaluator]
+        A list of evaluators.
+    cv : Union[int, BaseCrossValidator], optional
+        The cross validation strategy, by default KFold(n_splits=5)
+    random_state : Union[int, np.random.RandomState], optional
+        The random state, by default None
+    stratify : Union[np.ndarray, pd.Series], optional
+        The stratification variable, by default None
+    n_jobs : int, optional
+        The number of jobs to run in parallel, by default 1
+    Returns
+    -------
+    Sequence[Tuple[Evaluator, Any]]
+        A sequence of evaluated Evaluators (corresponding to the input evaluators)
+        and their evaluations.
     """
+
     # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
 
-    cv = 5 if cv is None else cv
     if isinstance(cv, int):
         cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
@@ -77,23 +106,49 @@ def bootstrap_model(
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
     n_jobs=1,
-) -> Sequence[Evaluator]:
+) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Retrain a model using bootstrap re-sampling.
 
     A list of evaluators determines what statistics are computed with the
     bootstrap samples.
 
-    The same sample are passed into `fit` and `evaluate`.
+    The same samples are passed into `fit` and `evaluate`.
+
+    Stratification is supported as in `sklearn.utils.resample`.
 
     Parameters
     ----------
-    use_group_cv: bool
-        This inputs the indices of the re-sampled datasets into the estimator
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    X : pd.DataFrame
+        The features.
+    y : Union[pd.DataFrame, pd.Series]
+        The target.
+    evaluators : Sequence[Evaluator]
+        A list of evaluators.
+    replications : int, optional
+        The number of bootstrap replications, by default 100
+    subsample : float, optional
+        Approximate proportion of the data to sample, by default 1.0
+    stratify : Optional[Union[pd.Series, np.ndarray]], optional
+        The stratification variable, by default None
+    random_state : Optional[Union[int, np.random.RandomState]], optional
+        The random state, by default None
+    use_group_cv : bool, optional
+        If true, the function inputs the indices of the re-sampled datasets into the estimator
         as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
         This can only be used with e.g. `GridSearchCV` where `cv` is
         `GroupKFold`. This stops the same sample appearing in both the test and
-        training splits of any inner cross validation.
+        training splits of any inner cross validation. By default False
+    n_jobs : int, optional
+        The number of jobs to run in parallel, by default 1
+
+    Returns
+    -------
+    Sequence[[Tuple[Evaluator,Any]]
+        A sequence of evaluated Evaluators (corresponding to the input evaluators)
+        and their evaluations.
     """
     # Run various checks and prepare the evaluators
     n = len(X)
@@ -141,17 +196,46 @@ def bootcross_model(
     """
     Use bootstrapping to compute random train/test folds (no sample sharing).
 
-    A list of evaluators determines what statistics are computed with the
+    The input evaluators determines what statistics are computed with the
     crossed bootstrap samples.
 
     Parameters
     ----------
-    use_group_cv: bool
-        This inputs the indices of the re-sampled datasets into the estimator
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    X : pd.DataFrame
+        The features.
+    y : Union[pd.DataFrame, pd.Series]
+        The target.
+    evaluators : Sequence[Evaluator]
+        A list of evaluators.
+    replications : int, optional
+        The number of "bootcross" replications, by default 100
+    test_size : Union[int, float], optional
+        The approximate proportion (float in (0-1))
+        or count (int in [1,n])
+        of the data to be used for the test set, by default 0.25
+    random_state : Optional[Union[int, np.random.RandomState]], optional
+        The random state, by default None
+    use_group_cv : bool, optional
+        If true, the function inputs the indices of the re-sampled datasets into the estimator
         as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
         This can only be used with e.g. `GridSearchCV` where `cv` is
         `GroupKFold`. This stops the same sample appearing in both the test and
-        training splits of any inner cross validation.
+        training splits of any inner cross validation. By default False
+    n_jobs : int, optional
+        The number of jobs to run in parallel, by default 1
+
+    Returns
+    -------
+    Sequence[Tuple[Evaluator, Any]]
+        A sequence of evaluated Evaluators (corresponding to the input evaluators),
+        and their evaluations.
+
+    Raises
+    ------
+    ValueError
+        If `test_size` is not a float between (0, 1) or an int in [1, n].
     """
     random_state = check_random_state(random_state)
     n = len(X)
