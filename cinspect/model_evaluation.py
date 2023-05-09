@@ -354,6 +354,37 @@ def _repeatedly_evaluate_model(
     n_jobs=1,
     name_for_logging: str = "Evaluation",
 ) -> Sequence[Tuple[Evaluator, Any]]:
+    """
+    Repeatedly evaluate a model on different train/test splits.
+
+    Optionally parallelises over the different train/test splits.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to evaluate
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    train_test_indices_generator : Sequence[ Tuple[npt.ArrayLike, npt.ArrayLike]
+        Sequence of train/test index arrays (can be lazy, hence 'generator')
+    evaluators : Sequence[Evaluator]
+        Evaluators to use
+    use_group_cv : bool, optional
+        Whether to use group cross validation, by default False
+    random_state : Optional[Union[int, np.random.RandomState]], optional
+        Random state, by default None
+    n_jobs : int, optional
+        Number of jobs to use, using `joblib.Parallel` by default 1
+    name_for_logging : str, optional
+        Name to use for this procedure in logging, by default "Evaluation"
+
+    Returns
+    -------
+    Sequence[Tuple[Evaluator, Any]]
+        Input evaluators and their corresponding aggregated evaluations.
+    """
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
 
@@ -408,14 +439,53 @@ def _repeatedly_evaluate_model(
     return list(zip(evaluators, evaluations_combined))
 
 
-def _set_evaluators_evaluations(evaluators_and_their_evaluations):
+def _set_evaluators_evaluations(evaluators_and_their_evaluations : Sequence[Tuple[Evaluator, Any]]):
+    """
+    Set the evaluations on the evaluators. Mutates the input evaluators.
+
+    Parameters
+    ----------
+    evaluators_and_their_evaluations : Sequence[Tuple[Evaluator, Any]]
+        Evaluators and their corresponding evaluations.
+    """
     for tor, tion in evaluators_and_their_evaluations:
         tor.set_evaluation(tion)
 
 
 def _train_evaluate_model(
-    estimator, X, y, train_indices, test_indices, evaluator, use_group_cv=False
-):
+    estimator : BaseEstimator,
+    X : pd.DataFrame,
+    y : Union[pd.DataFrame, pd.Series],
+    train_indices : Sequence[int],
+    test_indices : Sequence[int],
+    evaluator : Evaluator,
+    use_group_cv : bool = False,
+) -> Evaluator.Evaluation:
+    """
+    Train and evaluate a model on a given train/test split.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to evaluate
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    train_indices : Sequence[int]
+        Indices to use for training
+    test_indices : Sequence[int]
+        Indices to use for testing
+    evaluator : Evaluator
+        Evaluator to use
+    use_group_cv : bool, optional
+        Whether to use group cross validation, by default False
+
+    Returns
+    -------
+    Evaluator.Evaluation
+        Evaluation of the estimator on the given train/test split.
+    """
     est = _train_model(
         estimator=estimator,
         X=X,
@@ -439,7 +509,28 @@ def _train_model(
     y: Union[pd.DataFrame, pd.Series],
     train_indices: Sequence[int],
     use_group_cv: bool = False,
-):
+) -> BaseEstimator:
+    """
+    Train a model on a subset of the data. Mutates the input estimator.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to train
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    train_indices : Sequence[int]
+        Indices of the training data
+    use_group_cv : bool, optional
+        Whether to use group cross validation, by default False
+
+    Returns
+    -------
+    BaseEstimator
+        Trained estimator
+    """
     group = _check_group_estimator(estimator, use_group_cv)
     X_train, y_train = get_rows(X, train_indices), get_rows(y, train_indices)
     if group:
@@ -455,7 +546,27 @@ def _evaluate_model(
     y: Union[pd.DataFrame, pd.Series],
     evaluator: Evaluator,
     test_indices: Sequence[int],
-):
+) -> Evaluator.Evaluation:
+    """Evaluate a pre-trained estimator on a subset of the data.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to evaluate
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    evaluator : Evaluator
+        Evaluator to use
+    test_indices : Sequence[int]
+        Indices of the test data
+
+    Returns
+    -------
+    Evaluator.Evaluation
+        Evaluation of the trained estimator
+    """
     evaluation = evaluator.evaluate(
         estimator, get_rows(X, test_indices), get_rows(y, test_indices)
     )
@@ -467,5 +578,6 @@ def _evaluate_model(
 
 
 def _split_data(data, train_ind, test_ind):
+    """Split data into train and test sets, independently of the type of `data`."""
     data_r, data_s = get_rows(data, train_ind), get_rows(data, test_ind)
     return data_r, data_s
