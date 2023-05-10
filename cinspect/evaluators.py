@@ -19,7 +19,7 @@ from sklearn.base import clone
 from sklearn.metrics import get_scorer
 
 from cinspect import dependence, importance
-from cinspect.utils import get_column
+from cinspect.utils import Bunch, get_column
 
 LOG = logging.getLogger(__name__)
 
@@ -171,7 +171,12 @@ class Evaluator:
         Returns
         -------
         Any
-            _description_
+            The stored Evaluation (subclasses may override this)
+        
+        Raises
+        ------
+        Exception
+            If no evaluation is available
         """
         if evaluation is None and hasattr(self, "evaluation"):
             evaluation = self.evaluation
@@ -296,8 +301,6 @@ class BinaryTreatmentEffect(Evaluator):
         Value of treatment variable when "treated" , by default 1
     control_val: Any, optional
         Value of treatment variable when "untreated", by default 0
-    evaluate_mode: str, optional
-        Evaluation mode; "train"/"test"/"all", by default "all"
     """
 
     # type of the Evaluation produced
@@ -675,6 +678,8 @@ class _Dependance:
 class PermutationImportanceEvaluator(Evaluator):
     """Permutation Importance Evaluator.
 
+    TODO Evaluation could/should be a bunch of lists, rather than a list of bunches
+
     Parameters
     ----------
     n_repeats: int
@@ -734,10 +739,31 @@ class PermutationImportanceEvaluator(Evaluator):
         self.scorer = scorer
         self.conditional_filter = conditional_filter
 
-    def prepare(self, estimator, X, y=None, random_state=None):
-        """Prepare the evaluator with model and data information.
+    def prepare(self, 
+                estimator: Estimator,
+                X : npt.ArrayLike, 
+                y : Optional[npt.ArrayLike]=None , 
+                random_state : RandomStateType=None):
+        """
+        Prepare the evaluator with model and data information. Mutates the Evaluators state.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            The estimator that will be evaluated
+        X : npt.ArrayLike
+            Training feature data
+        y : Optional[npt.ArrayLike], optional
+            Training target data, by default None
+        random_state : RandomStateType, optional
+            Random state, by default None
+
+        Raises
+        ------
+        ValueError
+            If column grouping is requested but grouping types are heterogeneous
         """
         if self.end_transform_indx is not None:
             transformer = clone(estimator[0 : self.end_transform_indx])
@@ -774,10 +800,28 @@ class PermutationImportanceEvaluator(Evaluator):
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
-    def evaluate(self, estimator, X, y) -> List[np.ndarray]:
+    def evaluate(self, 
+                 estimator : Estimator, 
+                 X: npt.ArrayLike, 
+                 y: npt.ArrayLike) -> List[Bunch]:
         """Evaluate the fitted estimator with input data.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator: Estimator
+            The fitted estimator to evaluate
+        X: npt.ArrayLike
+            Feature data
+        y: npt.ArrayLike
+            Target data
+        
+        Returns
+        -------
+        List[Bunch]
+            A singleton list containing a Bunch that holds the permutation 
+            importance for each feature.
         """
         if self.end_transform_indx is not None:
             transformer = estimator[0 : self.end_transform_indx]
@@ -823,8 +867,19 @@ class PermutationImportanceEvaluator(Evaluator):
 
         return [imprt.importances]
 
-    def aggregate(self, evaluations: Sequence[List[np.ndarray]]) -> List[np.ndarray]:
-        """Concatenate sequence of evaluations."""
+    def aggregate(self, evaluations: Sequence[List[Bunch]]) -> List[Bunch]:
+        """Concatenate sequence of evaluations.
+        
+        Parameters
+        ----------
+        evaluations: Sequence[List[`~sklearn.utils.Bunch`]]
+            Sequence of evaluations to concatenate
+        
+        Returns
+        -------
+        List[`~sklearn.utils.Bunch`]
+            Concatenated evaluations
+        """
         return _flatten(evaluations)
 
     def get_results(self, evaluation=None, ntop=10, name=None) -> mpl.figure.Figure:
@@ -860,6 +915,21 @@ def _get_column_indices_and_names(X, columns=None):
     ----------
     X: numpy array or pd.DataFrame
     columns: iterable of strings or ints
+
+
+    Returns
+    -------
+    indices: list of ints
+    names: list of strings
+    passed_by_name: bool
+        True if columns were specified by name, False if by index
+
+    Raises
+    ------
+    KeyError
+        If a specified column name is not in the data
+    ValueError
+        If columns are specified by name but the data does not have column names
     """
     # columns not specified - return all
     if columns is None:
