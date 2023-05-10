@@ -172,7 +172,7 @@ class Evaluator:
         -------
         Any
             The stored Evaluation (subclasses may override this)
-        
+
         Raises
         ------
         Exception
@@ -739,11 +739,11 @@ class PermutationImportanceEvaluator(Evaluator):
         self.scorer = scorer
         self.conditional_filter = conditional_filter
 
-    def prepare(self, 
+    def prepare(self,
                 estimator: Estimator,
-                X : npt.ArrayLike, 
-                y : Optional[npt.ArrayLike]=None , 
-                random_state : RandomStateType=None):
+                X : npt.ArrayLike,
+                y : Optional[npt.ArrayLike] = None,
+                random_state : RandomStateType = None):
         """
         Prepare the evaluator with model and data information. Mutates the Evaluators state.
 
@@ -800,9 +800,9 @@ class PermutationImportanceEvaluator(Evaluator):
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
-    def evaluate(self, 
-                 estimator : Estimator, 
-                 X: npt.ArrayLike, 
+    def evaluate(self,
+                 estimator : Estimator,
+                 X: npt.ArrayLike,
                  y: npt.ArrayLike) -> List[Bunch]:
         """Evaluate the fitted estimator with input data.
 
@@ -816,11 +816,11 @@ class PermutationImportanceEvaluator(Evaluator):
             Feature data
         y: npt.ArrayLike
             Target data
-        
+
         Returns
         -------
         List[Bunch]
-            A singleton list containing a Bunch that holds the permutation 
+            A singleton list containing a Bunch that holds the permutation
             importance for each feature.
         """
         if self.end_transform_indx is not None:
@@ -869,12 +869,12 @@ class PermutationImportanceEvaluator(Evaluator):
 
     def aggregate(self, evaluations: Sequence[List[Bunch]]) -> List[Bunch]:
         """Concatenate sequence of evaluations.
-        
+
         Parameters
         ----------
         evaluations: Sequence[List[`~sklearn.utils.Bunch`]]
             Sequence of evaluations to concatenate
-        
+
         Returns
         -------
         List[`~sklearn.utils.Bunch`]
