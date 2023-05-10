@@ -8,7 +8,7 @@ from sklearn.linear_model import LinearRegression
 
 
 def conditional_cov(X, Y, estimator=None, bias=False, ddof=None):
-    r"""Compute the conditional covariance, COV(Y|X).
+    """Compute the conditional covariance, COV(Y|X).
 
     This computes:
 
@@ -64,7 +64,7 @@ def conditional_cov(X, Y, estimator=None, bias=False, ddof=None):
 
 
 def conditional_corrcoef(X, Y, estimator=None):
-    r"""Compute the conditional correlation, CORR(Y|X).
+    """Compute the conditional correlation, CORR(Y|X).
 
     This is the normalised covariance,
 
