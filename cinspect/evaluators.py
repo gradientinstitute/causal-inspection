@@ -17,9 +17,10 @@ import pandas as pd
 from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
+from sklearn.utils import Bunch
 
 from cinspect import dependence, importance
-from cinspect.utils import Bunch, get_column
+from cinspect.utils import get_column
 
 LOG = logging.getLogger(__name__)
 
@@ -819,7 +820,7 @@ class PermutationImportanceEvaluator(Evaluator):
 
         Returns
         -------
-        List[Bunch]
+        List[`~sklearn.utils.Bunch`]
             A singleton list containing a Bunch that holds the permutation
             importance for each feature.
         """

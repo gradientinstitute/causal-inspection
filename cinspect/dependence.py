@@ -305,7 +305,7 @@ def plot_partial_dependence_with_uncertainty(
     alpha : float = 0.5,
     label : str = None,
     ci_bounds : Tuple[float] = (0.025, 0.975)
-) -> Tuple[mpl.Figure, dict]:
+) -> Tuple[mpl.figure.Figure, dict]:
     """
     Plot partial dependence plot with uncertainty estimates.
 
@@ -349,7 +349,7 @@ def plot_partial_dependence_with_uncertainty(
 
     Returns
     -------
-    fig: Figure
+    fig: `~mpl.figure.Figure`
         A figure of the partial dependence results
     res: dict
         A results dictionary, with keys depending on the mode:
