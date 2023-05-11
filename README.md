@@ -103,7 +103,8 @@ pieval = PermutationImportanceEvaluator(n_repeats=5)
 # Bootstrap sample the data, re-fitting and re-evaluating the model each time.
 # This will run the GridSearchCV estimator, so thereby performing model
 # selection within each bootstrap sample.
-bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30)
+# n_jobs=-1 parallelises the bootstrapping to use all cores.
+bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30, n_jobs=-1)
 
 # Plot results
 pdeval.get_results(mode="interval")  # PD plot with confidence intervals
