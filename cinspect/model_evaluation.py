@@ -114,6 +114,7 @@ def bootstrap_model(
     The same samples are passed into `fit` and `evaluate`.
 
     Stratification is supported as in `sklearn.utils.resample`.
+    Mutates the evaluators in place, as well as returning them.
 
     Parameters
     ----------
@@ -199,6 +200,8 @@ def bootcross_model(
 
     The input evaluators determines what statistics are computed with the
     crossed bootstrap samples.
+
+    Mutates the evaluators in place, as well as returning them.
 
     Parameters
     ----------

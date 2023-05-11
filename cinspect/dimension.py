@@ -16,8 +16,8 @@ def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:
     In 2007 15th European Signal Processing Conference, 2007.
 
     Parameters:
-    X: 2d np.array
-        The feature matrix
+    X: np.array
+        The 2d feature matrix
 
     Returns
     -------

@@ -157,8 +157,8 @@ def construct_grid(
     -------
     grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
         Constructed grid, and its counts of unique elements.
-        Returned grid_counts is not None iff
-            grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+        Returned grid_counts is not None if and only if
+        grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
 
     Raises
     ------
@@ -327,11 +327,10 @@ def plot_partial_dependence_with_uncertainty(
         The dependent variable's name (used only for labels), by default None
     mode : str, optional
         One of:
-            multiple-pd-lines - a PD line for each sample of data
-            derivative - a derivative PD plot with mean and confidence
-                intervals.
-            interval - a PD plot with confidence intervals
-            ice-mu-sd - a PD plot with ICE mean and standard deviation
+            * multiple-pd-lines - a PD line for each sample of data
+            * derivative - a derivative PD plot with mean and confidence intervals.
+            * interval - a PD plot with confidence intervals
+            * ice-mu-sd - a PD plot with ICE mean and standard deviation
         By default "multiple-pd-lines"
     ax : plt.Axes, optional
         Axes to plot on, by default None.

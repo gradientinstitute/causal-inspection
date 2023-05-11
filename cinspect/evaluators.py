@@ -37,7 +37,7 @@ class Evaluator:
     """Abstract class for Evaluators to inherit from.
 
     Each subclass should have an associated Evaluation type.
-    This should be a monoid, where :method:`Evaluator.aggregate` is the monoid operation.
+    This should be a monoid, where :meth:`Evaluator.aggregate` is the monoid operation.
 
     Internal state should be this Evaluation; should be initialised with the Monoidal identity
 
@@ -72,7 +72,8 @@ class Evaluator:
             Features used for preparation (sub-class dependent semantics).
             Shape (n_features, n_rows)
         y : Optional[npt.ArrayLike], optional
-            Optional targets used for preparation, of shape (n_samples, n_targets), by default None.
+            Optional targets used for preparation, of shape `(n_samples, n_targets)`,
+            by default None.
         random_state : RandomStateType, optional
             Random state, by default None
         """
@@ -94,9 +95,9 @@ class Evaluator:
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
+            Features, of shape `(n_samples, n_features)`
         y : Optional[npt.ArrayLike], optional
-            Optional targets, of shape (n_samples, n_targets), by default None
+            Optional targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -113,13 +114,24 @@ class Evaluator:
         and is crucial for parallelisation.
 
         Evaluation should be a monoid with respect to this operation for sane behaviour:
-          - identity:
-            - aggregate([]) == unit
-            - aggregate( [unit] + evals ) == aggregate(evals) == aggregate(evals + [unit])
-          - associative:
-            - aggregate(aggregate([a]), aggregate([b,c])
-              == aggregate([a,b,c])
-              == aggregate(aggregate([a,b ]), aggregate([c])
+
+        * identity:
+            * aggregate([]) == unit
+            * and::
+
+                aggregate( [unit] + evals )
+
+                == aggregate(evals)
+
+                == aggregate(evals + [unit])
+        * associativity: ::
+
+            aggregate(aggregate([a]), aggregate([b,c])
+
+            == aggregate([a,b,c])
+
+            == aggregate(aggregate([a,b]), aggregate([c])
+
 
         TODO examples
         e.g. Evaluation could be a list of statistics, could be (mean, count) of a statistic,
@@ -240,9 +252,9 @@ class ScoreEvaluator(Evaluator):
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
+            Features, of shape `(n_samples, n_features)`
         y : Optional[npt.ArrayLike], optional
-            Optional targets, of shape (n_samples, n_targets), by default None
+            Optional targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -361,9 +373,9 @@ class BinaryTreatmentEffect(Evaluator):
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
+            Features, of shape `(n_samples, n_features)`
         y : npt.ArrayLike, optional
-            Unused targets, of shape (n_samples, n_targets), by default None
+            Unused targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -529,9 +541,9 @@ class PartialDependanceEvaluator(Evaluator):
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
+            Features, of shape `(n_samples, n_features)`
         y : Optional[npt.ArrayLike]
-            targets, of shape (n_samples, n_targets), by default None
+            targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
