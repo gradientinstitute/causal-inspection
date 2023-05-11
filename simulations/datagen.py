@@ -2,8 +2,8 @@
 # Licensed under the Apache 2.0 License.
 """Data generation classed for causal simulations."""
 
-import numpy as np
 import networkx as nx
+import numpy as np
 from scipy.special import expit
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.utils import check_random_state

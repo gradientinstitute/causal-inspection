@@ -7,16 +7,14 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from cinspect.evaluators import (
-    PartialDependanceEvaluator,
-    PermutationImportanceEvaluator,
-)
-from cinspect.model_evaluation import bootcross_model
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import GridSearchCV, GroupKFold
+from sklearn.pipeline import make_pipeline
 
+from cinspect.evaluators import (PartialDependanceEvaluator,
+                                 PermutationImportanceEvaluator)
+from cinspect.model_evaluation import bootcross_model
 from simulations.datagen import simple_triangle
 
 # Logging
@@ -83,7 +81,7 @@ def main():
     pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
     pieval = PermutationImportanceEvaluator(n_repeats=5)
     bootcross_model(
-        model, X, Y, [pdeval, pieval], replications=10, use_group_cv=True
+        model, X, Y, [pdeval, pieval], replications=10, use_group_cv=True, n_jobs=-1
     )  # To make sure we pass use GroupKFold
 
     pdeval.get_results(mode="interval")
