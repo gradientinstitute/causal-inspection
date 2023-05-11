@@ -1,4 +1,4 @@
-API
+cinspect API Reference
 ===
 
 This is the application programming interface guide for Causal Inspection.
