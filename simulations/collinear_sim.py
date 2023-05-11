@@ -29,12 +29,12 @@ logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 TRUE_ATE = 0.3
 
 
-def make_data() -> Tuple[ArrayLike, ArrayLike]:
+def make_data() -> Tuple[pd.DataFrame, np.ndarray]:
     """Construct collinear simulation data.
 
     Returns
     -------
-    (X, y) : Tuple[ArrayLike, ArrayLike]
+    (X, y) : Tuple[pd.DataFrame, np.ndarray]
         (features, target)
     """
     n = 500
@@ -56,7 +56,7 @@ def load_synthetic_data():
 
     Returns
     -------
-    (X, y) : Tuple[ArrayLike, ArrayLike]
+    (X, y) : Tuple[pd.DataFrame, np.ndarray]
         (features, target)
     """
     data_file = "../data/synthetic_data.csv"
