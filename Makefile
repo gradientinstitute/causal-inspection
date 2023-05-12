@@ -30,3 +30,7 @@ test:
 
 test-ci:
 	pytest . --cov=cinspect tests/ --hypothesis-profile "ci"
+
+# shortcut for making html docs
+doc:
+	$(MAKE) html -C docs
