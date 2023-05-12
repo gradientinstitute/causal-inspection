@@ -48,8 +48,6 @@ class Evaluator:
     Mostly... Evaluator holds metadata for its Evaluation.
     Liskov substitution principle suggests that subtypes should be swappable;
     this is not currently true because we can't enforce the behaviour of the objects' consumers
-
-    
     """
 
     Evaluation = TypeVar("Evaluation")
@@ -288,7 +286,7 @@ class ScoreEvaluator(Evaluator):
 
         Parameters
         ----------
-        evaluation : ScoreEvaluation, optional 
+        evaluation : ScoreEvaluation, optional
             ScoreEvaluation dictionary to convert. Otherwise extract this object's stored scores.
 
         Returns
