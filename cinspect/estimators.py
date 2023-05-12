@@ -2,6 +2,11 @@
 # Licensed under the Apache 2.0 License.
 """Convenience estimators for causal estimation."""
 
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+
+from __future__ import annotations
+
 from typing import Any, NamedTuple, Optional, Union  # , Self
 
 import numpy as np
@@ -168,7 +173,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
     treatment_column: Union[str, int]
         Treatment column index
         TODO: str only if it's a dataframe
-    treatment_val: Optional[Any], default 1
+    treatment_val: Any, optional
         Constant value of treatment column
         which denotes that the current row is in the treatment cohort
         TODO example
@@ -273,7 +278,7 @@ class BinaryTreatmentRegressor(BaseEstimator, RegressorMixin):
         """
         Set the parameters of this estimator.
 
-        This is a method of :class:`~sklearn.base.BaseEstimator`.
+        This is a method of :class:`sklearn.base.BaseEstimator`.
 
         TODO satisfy the following:
 

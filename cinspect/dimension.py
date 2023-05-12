@@ -16,7 +16,8 @@ def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:
     "The effective rank: A measure of effective dimensionality."
     In 2007 15th European Signal Processing Conference, 2007.
 
-    Parameters:
+    Parameters
+    ----------
     X: np.array
         The 2d feature matrix
 
@@ -50,7 +51,7 @@ def greedy_feature_selection(
     maximise_metric: Callable
         A function that takes X and returns a number.
 
-    initial_col: Optional(int)
+    initial_col: int, optional
         If set, the selected features will be initialised with this column.
 
     num_to_select: int

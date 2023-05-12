@@ -253,9 +253,11 @@ class DGPGraph:
         """Compute the estimated Conditional Average Treatment Effect from a sample size n.
         
         Multiple condition values can be passed and the CATE will be computed for each.
+
         Parameters
         ----------
         n: int
+            The number of samples to draw for the estimate
         treatment_node: str
             The name of the treatment node
         outcome_node: str
@@ -271,7 +273,7 @@ class DGPGraph:
 
         Returns
         -------
-        cate: np.ndarray
+        cate: :class:`np.ndarray`
             The estimated Conditional Average Treatment Effect for each condition value.
             Shape (len(condition_values),)
 

@@ -2,6 +2,9 @@
 # Licensed under the Apache 2.0 License.
 """Causal model evaluation functions."""
 
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+from __future__ import annotations
 
 import inspect
 import logging
@@ -130,9 +133,9 @@ def bootstrap_model(
         The number of bootstrap replications, by default 100
     subsample : float, optional
         Approximate proportion of the data to sample, by default 1.0
-    stratify : Optional[Union[pd.Series, np.ndarray]], optional
+    stratify : Union[pd.Series, np.ndarray], optional
         The stratification variable, by default None
-    random_state : Optional[Union[int, np.random.RandomState]], optional
+    random_state : Union[int, np.random.RandomState], optional
         The random state, by default None
     use_group_cv : bool, optional
         If true, the function inputs the indices of the re-sampled datasets into the estimator
@@ -219,7 +222,7 @@ def bootcross_model(
         The approximate proportion (float in (0-1))
         or count (int in [1,n])
         of the data to be used for the test set, by default 0.25
-    random_state : Optional[Union[int, np.random.RandomState]], optional
+    random_state : Union[int, np.random.RandomState], optional
         The random state, by default None
     use_group_cv : bool, optional
         If true, the function inputs the indices of the re-sampled datasets into the estimator
@@ -376,7 +379,7 @@ def _repeatedly_evaluate_model(
         Evaluators to use
     use_group_cv : bool, optional
         Whether to use group cross validation, by default False
-    random_state : Optional[Union[int, np.random.RandomState]], optional
+    random_state : Union[int, np.random.RandomState], optional
         Random state, by default None
     n_jobs : int, optional
         Number of jobs to use, using `joblib.Parallel` by default 1

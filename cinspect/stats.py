@@ -35,13 +35,13 @@ def conditional_cov(X, Y, estimator=None, bias=False, ddof=None):
         A two-dimensional (n, p) array of conditioning variables.
     Y: ndarray, DataFrame
         A two-dimensional (n, d) array of variables.
-    estimator: optional, scikit learn multiple output regression estimator
+    estimator: scikit learn multiple output regression estimator, optional
         A multiple output regression estimator. By default this is a
         LinearRegression estimator. This is to compute the relationship
         E[Y|X] for the conditional covariance.
     bias: bool
         How to normalise the covariance matrix. See numpy.cov for more details.
-    ddof: optional, int
+    ddof: int, optional
         The degrees of freedom to use for normalisation. See numpy.cov for more
         details.
 

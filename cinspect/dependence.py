@@ -2,6 +2,10 @@
 # Licensed under the Apache 2.0 License.
 """Partial dependence and individual conditional expectation functions."""
 
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+from __future__ import annotations
+
 import numbers
 from typing import List, Optional, Sequence, Tuple, Type, Union
 
@@ -83,7 +87,7 @@ def individual_conditional_expectation(
         compute the curve. if an int is passed uses a linear grid of length
         grid_values from the minimum to the maximum.
 
-    predict_method: callable method on model (optional)
+    predict_method: callable method on model, optional
         The method to call to predict.
         Defaults to predict_proba for classifiers and predict for regressors.
 
@@ -250,7 +254,7 @@ def plot_partial_dependence_density(
 
     Returns
     -------
-    bins: : np.ndarray
+    bins: np.ndarray
         The edges of the bins. Length nbins + 1 (nbins left edges and right edge of last bin).
         Always a single array even when multiple data sets are passed in.
 
@@ -348,7 +352,7 @@ def plot_partial_dependence_with_uncertainty(
 
     Returns
     -------
-    fig: `~mpl.figure.Figure`
+    fig: :class:`mpl.figure.Figure`
         A figure of the partial dependence results
     res: dict
         A results dictionary, with keys depending on the mode:

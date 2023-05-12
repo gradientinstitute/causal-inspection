@@ -33,6 +33,10 @@ exclude_patterns = []
 
 autoclass_content = 'class'  # 'both': concatenate, display *both* the class and __init__ docstrings
 autodoc_typehints = "both" # make explicit that typehints are shown in the signature, rather than the description
+# source files that import annotations from __future__ can use un-expanded type aliases listed below
+# See https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_type_aliases
+autodoc_type_aliases = {"npt.ArrayLike": "npt.ArrayLike", }
+
 # -- Options for sphinx.ext.extlinks
 
 # use :issue:`123` to link to project issue on GitHub

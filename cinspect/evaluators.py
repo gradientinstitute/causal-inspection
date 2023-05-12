@@ -1,6 +1,9 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Result evaluator classes."""
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+from __future__ import annotations
 
 import functools
 import logging
@@ -27,9 +30,9 @@ LOG = logging.getLogger(__name__)
 # TODO sphinx documentation of custom types/type aliases
 Estimator = TypeVar("Estimator")  # intention is an sklearn estimator
 
-# random states as per sklearn
 # https://scikit-learn.org/dev/glossary.html#term-random_state
 # TODO sphinx documentation
+"""Type for random state, as per sklearn."""
 RandomStateType = Optional[Union[int, np.random.RandomState]]
 
 
@@ -45,6 +48,8 @@ class Evaluator:
     Mostly... Evaluator holds metadata for its Evaluation.
     Liskov substitution principle suggests that subtypes should be swappable;
     this is not currently true because we can't enforce the behaviour of the objects' consumers
+
+    
     """
 
     Evaluation = TypeVar("Evaluation")
@@ -58,11 +63,6 @@ class Evaluator:
         Prepare the evaluator with model and data information.
 
         This is called by a model evaluation function in model_evaluation.
-
-        Parameters
-        ----------
-         Optional[Union[int, np.random.RandomState]], optional
-            Random state, by default RandomStateType
 
         Parameters
         ----------
@@ -153,7 +153,7 @@ class Evaluator:
     def set_evaluation(self, evaluation: Evaluation) -> None:
         """Setter; sets this object's evaluation.
 
-        Subclasses should ensure that this and self.prepare(..)
+        Subclasses should ensure that this and :meth:`self.prepare`
         are the only ways to modify internal state.
 
 
@@ -210,7 +210,7 @@ class ScoreEvaluator(Evaluator):
     scorers: list[str|Scorer]
         List of scorers/scorer names to compute.
         Names -> scorer correspondence dictated by `sklearn.metrics.get_scorer`
-    groupby: (optional) str or list[str]
+    groupby:  str or list[str], optional
         List or string indicating that scores should be calculated
         separately within groups defined by this/these variables.
         TODO: this is currently implemented implicitly using pandas
@@ -253,7 +253,7 @@ class ScoreEvaluator(Evaluator):
             An sklearn estimator
         X : npt.ArrayLike
             Features, of shape `(n_samples, n_features)`
-        y : Optional[npt.ArrayLike], optional
+        y : npt.ArrayLike, optional
             Optional targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
@@ -288,7 +288,7 @@ class ScoreEvaluator(Evaluator):
 
         Parameters
         ----------
-        evaluation : Optional[ScoreEvaluation], by default None
+        evaluation : ScoreEvaluation, optional 
             ScoreEvaluation dictionary to convert. Otherwise extract this object's stored scores.
 
         Returns
@@ -469,16 +469,16 @@ class PartialDependanceEvaluator(Evaluator):
 
         Parameters
         ----------
-        feature_grids: (optional) Dict[str, npt.ArrayLike], by default None
+        feature_grids: Dict[str, npt.ArrayLike], optional
             Map from feature_name to grid of values for that feature.
             If set, dependence will only be computed for specified features.
 
         conditional_filter:
-        (optional) Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]]
+        Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]], optional
             Used to filter X and y before computing dependence
             Takes X,y, produces new X,y
             by default None: no filter
-        end_transform_indx: (optional) int
+        end_transform_indx: int, optional
             compute dependence with respect to this point of the pipeline onwards.
             TODO dive deep, write example
         """
@@ -542,7 +542,7 @@ class PartialDependanceEvaluator(Evaluator):
             An sklearn estimator
         X : npt.ArrayLike
             Features, of shape `(n_samples, n_features)`
-        y : Optional[npt.ArrayLike]
+        y : npt.ArrayLike, optional
             targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
@@ -614,7 +614,7 @@ class PartialDependanceEvaluator(Evaluator):
             _description_, by default "black"
         color_samples: str, optional
             _description_, by default "grey"
-        pd_alpha: _type_, optional
+        pd_alpha: float, optional
             _description_, by default None
         ci_bounds: tuple, optional
             _description_, by default (0.025, 0.975)
@@ -702,20 +702,20 @@ class PermutationImportanceEvaluator(Evaluator):
     n_top: int
         The number of features to show on the plot
 
-    features: (optional) [int] or [str] or {str:[int]}
+    features: [int] or [str] or {str:[int]}, optional
         A list of features, either indices or column names for which importance
         should be computed. Defaults to computing importance for all features.
 
-    end_transform_indx: (optional) int
+    end_transform_indx: int, optional
         Set if you which to compute feature importance with respect to features
         after this point in the pipeline. Defaults to computing importance with
         respect to the whole pipeline.
 
-    grouped: bool (default=False)
+    grouped: bool, optional
         Should features be permuted together as groups. If True, features must
         be passed as a dictionary.
 
-    conditional_filter: (optional) callable
+    conditional_filter: callable, optional
         Used to filter X and y before computing importance
     """
 
@@ -768,7 +768,7 @@ class PermutationImportanceEvaluator(Evaluator):
             The estimator that will be evaluated
         X : npt.ArrayLike
             Training feature data
-        y : Optional[npt.ArrayLike], optional
+        y : npt.ArrayLike, optional
             Training target data, by default None
         random_state : RandomStateType, optional
             Random state, by default None
@@ -832,7 +832,7 @@ class PermutationImportanceEvaluator(Evaluator):
 
         Returns
         -------
-        List[`~sklearn.utils.Bunch`]
+        List[:class:`~sklearn.utils.Bunch`]
             A singleton list containing a Bunch that holds the permutation
             importance for each feature.
         """
@@ -885,12 +885,12 @@ class PermutationImportanceEvaluator(Evaluator):
 
         Parameters
         ----------
-        evaluations: Sequence[List[`~sklearn.utils.Bunch`]]
+        evaluations: Sequence[List[:class:`~sklearn.utils.Bunch`]]
             Sequence of evaluations to concatenate
 
         Returns
         -------
-        List[`~sklearn.utils.Bunch`]
+        List[:class:`~sklearn.utils.Bunch`]
             Concatenated evaluations
         """
         return _flatten(evaluations)
