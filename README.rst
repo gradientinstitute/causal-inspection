@@ -3,10 +3,12 @@ Causal Inspection
 
 A Scikit-learn inspired inspection module for *causal models*.
 
-<img src="pd_examples.png" alt="Example partial dependence plots">
+.. image:: https://github.com/gradientinstitute/causal-inspection/blob/main/pd_examples.png
+    :alt: Example partial dependence plots
+
 Plots generated using this library, these are an example of how partial 
 dependence plots can be used for visualising causal effect, see [3] for 
-more details.<br><br>
+more details.
 
 Using machine learning for (observational) causal inference is distinct from
 how machine learning is used for prediction. Typically a process like the
@@ -31,8 +33,7 @@ plotting for continuous and discrete treatment effects [1, 2], as well as
 methods for estimating binary and categorical treatment effects.
 
 We have implemented (some) of the visualisation and quantification methods
-discussed in [1] and [2]. Please see the [Example
-Usage](https://github.com/gradientinstitute/causal-inspection#example-usage)
+discussed in [1] and [2]. Please see the `Example Usage`_
 section for more details.
 
 
@@ -42,15 +43,19 @@ Installation
 To just install the cinspect package, clone it from github and then in the
 cloned directory,
 
+::
+
     pip install .
 
 To also install the extra packages required for development and simulation,
 install in the following way,
 
+::
+
     pip install -e .[dev]
 
-You may have to escape some of the characters in this command, e.g. `pip
-install -e .\[dev\]`. You can then run the simulations in the `simulations`
+You may have to escape some of the characters in this command, e.g. ``pip
+install -e .\[dev\]``. You can then run the simulations in the ``simulations``
 directory.
 
 
@@ -65,9 +70,9 @@ Modules
 Example Usage
 -------------
 
-We strive for an interface that is familiar to those who use scikit-learn. In
-particular we have emulated the interface to the
-[`cross_validate`](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_validate.html)
+We strive for an interface that is familiar to those who use `scikit-learn <https://scikit-learn.org/>`_.
+In particular we have emulated the interface to the
+`cross_validate <https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_validate.html>`_
 function.
 
 The advantage of this interface is that you can use scikit-learn pipeline
@@ -79,40 +84,42 @@ partial dependence plots with confidence intervals, and permutation importance
 plots.
 
 
-```python
-import matplotlib.pyplot as plt
+.. code:: python
+    
+    import matplotlib.pyplot as plt
 
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import GridSearchCV
-from cinspect import (bootstrap_model, PartialDependanceEvaluator,
-    PermutationImportanceEvaluator)
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.model_selection import GridSearchCV
+    from cinspect import (bootstrap_model, PartialDependanceEvaluator,
+        PermutationImportanceEvaluator)
 
-# X is a pandas dataframe with a column labelled "T" for treatment
-# ...
+    # X is a pandas dataframe with a column labelled "T" for treatment
+    # ...
 
-# Model, with built in model selection
-model = GridSearchCV(
-    GradientBoostingRegressor(),
-    param_grid={"max_depth": [1, 2, 3]}
-)
+    # Model, with built in model selection
+    model = GridSearchCV(
+        GradientBoostingRegressor(),
+        param_grid={"max_depth": [1, 2, 3]}
+    )
 
-# Casual estimation - partial dependence and permutation importance
-pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
-pieval = PermutationImportanceEvaluator(n_repeats=5)
+    # Casual estimation - partial dependence and permutation importance
+    pdeval = PartialDependanceEvaluator(feature_grids={"T": "auto"})
+    pieval = PermutationImportanceEvaluator(n_repeats=5)
 
-# Bootstrap sample the data, re-fitting and re-evaluating the model each time.
-# This will run the GridSearchCV estimator, so thereby performing model
-# selection within each bootstrap sample.
-# n_jobs=-1 parallelises the bootstrapping to use all cores.
-bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30, n_jobs=-1)
+    # Bootstrap sample the data, re-fitting and re-evaluating the model each time.
+    # This will run the GridSearchCV estimator, so thereby performing model
+    # selection within each bootstrap sample.
+    # n_jobs=-1 parallelises the bootstrapping to use all cores.
+    bootstrap_model(best_model, X, Y, [pdeval, pieval], replications=30, n_jobs=-1)
 
-# Plot results
-pdeval.get_results(mode="interval")  # PD plot with confidence intervals
-pdeval.get_results(mode="derivative")  # Derivative PD plots, see [2]
-pieval.get_results(ntop=5)  # Permutation importance, show top 5 features
+    # Plot results
+    pdeval.get_results(mode="interval")  # PD plot with confidence intervals
+    pdeval.get_results(mode="derivative")  # Derivative PD plots, see [2]
+    pieval.get_results(ntop=5)  # Permutation importance, show top 5 features
 
-plt.show()
-```
+    plt.show()
+
+
 
 See `simulations/simple_sim.py` for a slightly more complex version where we
 integrate model selection within the bootstrap sampling procedure.
