@@ -59,7 +59,9 @@ def crossval_model(
     evaluators : Sequence[Evaluator]
         A list of evaluators.
     cv : Union[int, BaseCrossValidator], optional
-        The cross validation strategy, by default KFold(n_splits=5)
+        The cross validation strategy, by default KFold(n_splits=5).
+        Passing an integer will use KFold with that number of splits,
+        like `sklearn.model_selection.cross_validate`.
     random_state : Union[int, np.random.RandomState], optional
         The random state, by default None
     stratify : Union[np.ndarray, pd.Series], optional
@@ -75,6 +77,9 @@ def crossval_model(
     # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
 
+    # TODO: use sklearn.model_selection.check_cv instead
+    # this will directly mimic sklearn.model_selection.cross_validate
+    # but changes behaviour (uses StratifiedKFold) if the estimator is a classifier
     if isinstance(cv, int):
         cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
