@@ -2,9 +2,10 @@
 # Licensed under the Apache 2.0 License.
 """Methods for reducing or understanding the dimensionality of a matrix."""
 
+from typing import Callable, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-from typing import Callable, Tuple, List, Optional, Union
 
 
 def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:
@@ -15,16 +16,15 @@ def effective_rank(X: Union[np.ndarray, pd.DataFrame]) -> float:
     "The effective rank: A measure of effective dimensionality."
     In 2007 15th European Signal Processing Conference, 2007.
 
-    Parameters:
-    X: 2d np.array
-        The feature matrix
+    Parameters
+    ----------
+    X: np.array
+        The 2d feature matrix
 
     Returns
     -------
     erank: float
         The effective rank (will always be between 1 and rank(X))
-
-
     """
     u, s, v = np.linalg.svd(X.T @ X)
     norm_s = np.abs(s).sum()
@@ -51,7 +51,7 @@ def greedy_feature_selection(
     maximise_metric: Callable
         A function that takes X and returns a number.
 
-    initial_col: Optional(int)
+    initial_col: int, optional
         If set, the selected features will be initialised with this column.
 
     num_to_select: int

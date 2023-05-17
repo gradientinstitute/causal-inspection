@@ -2,6 +2,9 @@
 # Licensed under the Apache 2.0 License.
 """Causal model evaluation functions."""
 
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+from __future__ import annotations
 
 import inspect
 import logging
@@ -22,6 +25,10 @@ from cinspect.utils import get_rows
 
 LOG = logging.getLogger(__name__)
 
+# TODO consolidate return types: there is currently redundancy:
+# we could either return the evaluations (and formalise the index-wise input-output correpondence),
+# or the evaluated evaluations, but probably not both
+
 
 def crossval_model(
     estimator: BaseEstimator,
@@ -30,21 +37,49 @@ def crossval_model(
     evaluators: Sequence[Evaluator],
     cv: Optional[
         Union[int, BaseCrossValidator]
-    ] = None,  # defaults to KFold(n_splits=5)
+    ] = 5,  # defaults to KFold(n_splits=5)
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     stratify: Optional[Union[np.ndarray, pd.Series]] = None,
-    n_jobs=1,
-) -> Sequence[Evaluator]:
+    n_jobs: Optional[int] = 1,
+) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Evaluate a model using cross validation.
 
     A list of evaluators determines what other metrics, such as feature
-    importance and partial dependence are computed
+    importance and partial dependence are computed.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    X : pd.DataFrame
+        The features.
+    y : Union[pd.Series, pd.DataFrame]
+        The target.
+    evaluators : Sequence[Evaluator]
+        A list of evaluators.
+    cv : Union[int, BaseCrossValidator], optional
+        The cross validation strategy, by default KFold(n_splits=5).
+        Passing an integer will use KFold with that number of splits,
+        like `sklearn.model_selection.cross_validate`.
+    random_state : Union[int, np.random.RandomState], optional
+        The random state, by default None
+    stratify : Union[np.ndarray, pd.Series], optional
+        The stratification variable, by default None
+    n_jobs : int, optional
+        The number of jobs to run in parallel, by default 1
+    Returns
+    -------
+    Sequence[Tuple[Evaluator, Any]]
+        A sequence of evaluated Evaluators (corresponding to the input evaluators)
+        and their evaluations.
     """
     # Run various checks and prepare the evaluators
     random_state = check_random_state(random_state)
 
-    cv = 5 if cv is None else cv
+    # TODO: use sklearn.model_selection.check_cv instead
+    # this will directly mimic sklearn.model_selection.cross_validate
+    # but changes behaviour (uses StratifiedKFold) if the estimator is a classifier
     if isinstance(cv, int):
         cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
@@ -77,23 +112,50 @@ def bootstrap_model(
     random_state: Optional[Union[int, np.random.RandomState]] = None,
     use_group_cv: bool = False,
     n_jobs=1,
-) -> Sequence[Evaluator]:
+) -> Sequence[Tuple[Evaluator, Any]]:
     """
     Retrain a model using bootstrap re-sampling.
 
     A list of evaluators determines what statistics are computed with the
     bootstrap samples.
 
-    The same sample are passed into `fit` and `evaluate`.
+    The same samples are passed into `fit` and `evaluate`.
+
+    Stratification is supported as in `sklearn.utils.resample`.
+    Mutates the evaluators in place, as well as returning them.
 
     Parameters
     ----------
-    use_group_cv: bool
-        This inputs the indices of the re-sampled datasets into the estimator
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    X : pd.DataFrame
+        The features.
+    y : Union[pd.DataFrame, pd.Series]
+        The target.
+    evaluators : Sequence[Evaluator]
+        A list of evaluators.
+    replications : int, optional
+        The number of bootstrap replications, by default 100
+    subsample : float, optional
+        Approximate proportion of the data to sample, by default 1.0
+    stratify : Union[pd.Series, np.ndarray], optional
+        The stratification variable, by default None
+    random_state : Union[int, np.random.RandomState], optional
+        The random state, by default None
+    use_group_cv : bool, optional
+        If true, the function inputs the indices of the re-sampled datasets into the estimator
         as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
         This can only be used with e.g. `GridSearchCV` where `cv` is
         `GroupKFold`. This stops the same sample appearing in both the test and
-        training splits of any inner cross validation.
+        training splits of any inner cross validation. By default False
+    n_jobs : int, optional
+        The number of jobs to run in parallel, by default 1
+
+    Returns
+    -------
+    Sequence[[Tuple[Evaluator,Any]]
+        A sequence of evaluated Evaluators (corresponding to the input evaluators)
+        and their evaluations.
     """
     # Run various checks and prepare the evaluators
     n = len(X)
@@ -138,20 +200,54 @@ def bootcross_model(
     use_group_cv: bool = False,
     n_jobs=1,
 ) -> Sequence[Tuple[Evaluator, Any]]:
-    """
-    Use bootstrapping to compute random train/test folds (no sample sharing).
+    """Use bootstrapping to compute random train/test folds (no sample sharing).
 
-    A list of evaluators determines what statistics are computed with the
+    "Bootcross": split into train/test sets
+    then seperately resample these sets (once) with replacement.
+
+
+    The input evaluators determines what statistics are computed with the
     crossed bootstrap samples.
+
+    Mutates the evaluators in place, as well as returning them.
 
     Parameters
     ----------
-    use_group_cv: bool
-        This inputs the indices of the re-sampled datasets into the estimator
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    X : pd.DataFrame
+        The features.
+    y : Union[pd.DataFrame, pd.Series]
+        The target.
+    evaluators : Sequence[Evaluator]
+        A list of evaluators.
+    replications : int, optional
+        The number of "bootcross" replications, by default 100
+    test_size : Union[int, float], optional
+        The approximate proportion (float in (0-1))
+        or count (int in [1,n])
+        of the data to be used for the test set, by default 0.25
+    random_state : Union[int, np.random.RandomState], optional
+        The random state, by default None
+    use_group_cv : bool, optional
+        If true, the function inputs the indices of the re-sampled datasets into the estimator
         as `estimator.fit(X_resample, y_resample, groups=indices_resample)`.
         This can only be used with e.g. `GridSearchCV` where `cv` is
         `GroupKFold`. This stops the same sample appearing in both the test and
-        training splits of any inner cross validation.
+        training splits of any inner cross validation. By default False
+    n_jobs : int, optional
+        The number of jobs to run in parallel, by default 1
+
+    Returns
+    -------
+    Sequence[Tuple[Evaluator, Any]]
+        A sequence of evaluated Evaluators (corresponding to the input evaluators),
+        and their evaluations.
+
+    Raises
+    ------
+    ValueError
+        If `test_size` is not a float between (0, 1) or an int in [1, n].
     """
     random_state = check_random_state(random_state)
     n = len(X)
@@ -183,9 +279,25 @@ def bootcross_model(
     return evaluators_evaluations
 
 
-def _check_group_estimator(estimator, use_group_cv):
+def _check_group_estimator(estimator : BaseEstimator
+                           , use_group_cv : bool) -> bool:
+    """Perform checks on the estimator and use_group_cv parameter.
+
+    If use_group_cv is True, warn the user if the estimator doesn't support groups.
+    If use_group_cv is False, warn the user if the estimator is a parameter search estimator.
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        A scikit-learn estimator.
+    use_group_cv : bool
+        Whether or not to use groups in cross validation procedure.
+    Returns
+    -------
+    bool
+        simply passes through `use_group_cv`
+    """
     if use_group_cv:
-        # Check if estimator supports group keyword
+        # Check if estimator supports groups keyword
         spec = inspect.signature(estimator.fit)
         if "groups" not in spec.parameters:
             LOG.warning(
@@ -204,10 +316,36 @@ def _check_group_estimator(estimator, use_group_cv):
     return use_group_cv
 
 
-def _bootcross_split(data_size, test_size, random_state):
+def _bootcross_split(data_size : int
+                     , test_size : int
+                     , random_state : np.random.RandomState
+                     ) -> Tuple[np.ndarray, np.ndarray]:
+    """Split indices for "bootcross".
+
+    Bootcross: split into train/test, then resample these sets (once) with replacement.
+
+    Parameters
+    ----------
+    data_size : int
+        number of samples to split
+    test_size : int
+        number of samples to use for test set
+    random_state : np.random.RandomState
+        random state
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        train indices, test indices
+    """
+    assert test_size > 0 and test_size <= data_size
+
+    # random permutation of range(data_size)
     permind = random_state.permutation(data_size)
+    # split into test and train indices
     test_ind = permind[:test_size]
     train_ind = permind[test_size:]
+    # resample these train/test indices with replacement
     test_boot = resample(test_ind, random_state=random_state)
     train_boot = resample(train_ind, random_state=random_state)
     return train_boot, test_boot
@@ -227,6 +365,37 @@ def _repeatedly_evaluate_model(
     n_jobs=1,
     name_for_logging: str = "Evaluation",
 ) -> Sequence[Tuple[Evaluator, Any]]:
+    """
+    Repeatedly evaluate a model on different train/test splits.
+
+    Optionally parallelises over the different train/test splits.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to evaluate
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    train_test_indices_generator : Sequence[ Tuple[npt.ArrayLike, npt.ArrayLike]
+        Sequence of train/test index arrays (can be lazy, hence 'generator')
+    evaluators : Sequence[Evaluator]
+        Evaluators to use
+    use_group_cv : bool, optional
+        Whether to use group cross validation, by default False
+    random_state : Union[int, np.random.RandomState], optional
+        Random state, by default None
+    n_jobs : int, optional
+        Number of jobs to use, using `joblib.Parallel` by default 1
+    name_for_logging : str, optional
+        Name to use for this procedure in logging, by default "Evaluation"
+
+    Returns
+    -------
+    Sequence[Tuple[Evaluator, Any]]
+        Input evaluators and their corresponding aggregated evaluations.
+    """
     # Runs code that requires the full set of data to be available For example
     # to select the range over which partial dependence should be shown.
 
@@ -281,14 +450,53 @@ def _repeatedly_evaluate_model(
     return list(zip(evaluators, evaluations_combined))
 
 
-def _set_evaluators_evaluations(evaluators_and_their_evaluations):
+def _set_evaluators_evaluations(evaluators_and_their_evaluations : Sequence[Tuple[Evaluator, Any]]):
+    """
+    Set the evaluations on the evaluators. Mutates the input evaluators.
+
+    Parameters
+    ----------
+    evaluators_and_their_evaluations : Sequence[Tuple[Evaluator, Any]]
+        Evaluators and their corresponding evaluations.
+    """
     for tor, tion in evaluators_and_their_evaluations:
         tor.set_evaluation(tion)
 
 
 def _train_evaluate_model(
-    estimator, X, y, train_indices, test_indices, evaluator, use_group_cv=False
-):
+    estimator : BaseEstimator,
+    X : pd.DataFrame,
+    y : Union[pd.DataFrame, pd.Series],
+    train_indices : Sequence[int],
+    test_indices : Sequence[int],
+    evaluator : Evaluator,
+    use_group_cv : bool = False,
+) -> Evaluator.Evaluation:
+    """
+    Train and evaluate a model on a given train/test split.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to evaluate
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    train_indices : Sequence[int]
+        Indices to use for training
+    test_indices : Sequence[int]
+        Indices to use for testing
+    evaluator : Evaluator
+        Evaluator to use
+    use_group_cv : bool, optional
+        Whether to use group cross validation, by default False
+
+    Returns
+    -------
+    Evaluator.Evaluation
+        Evaluation of the estimator on the given train/test split.
+    """
     est = _train_model(
         estimator=estimator,
         X=X,
@@ -312,7 +520,28 @@ def _train_model(
     y: Union[pd.DataFrame, pd.Series],
     train_indices: Sequence[int],
     use_group_cv: bool = False,
-):
+) -> BaseEstimator:
+    """
+    Train a model on a subset of the data. Mutates the input estimator.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to train
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    train_indices : Sequence[int]
+        Indices of the training data
+    use_group_cv : bool, optional
+        Whether to use group cross validation, by default False
+
+    Returns
+    -------
+    BaseEstimator
+        Trained estimator
+    """
     group = _check_group_estimator(estimator, use_group_cv)
     X_train, y_train = get_rows(X, train_indices), get_rows(y, train_indices)
     if group:
@@ -328,7 +557,27 @@ def _evaluate_model(
     y: Union[pd.DataFrame, pd.Series],
     evaluator: Evaluator,
     test_indices: Sequence[int],
-):
+) -> Evaluator.Evaluation:
+    """Evaluate a pre-trained estimator on a subset of the data.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator
+        Estimator to evaluate
+    X : pd.DataFrame
+        Features
+    y : Union[pd.DataFrame, pd.Series]
+        Target
+    evaluator : Evaluator
+        Evaluator to use
+    test_indices : Sequence[int]
+        Indices of the test data
+
+    Returns
+    -------
+    Evaluator.Evaluation
+        Evaluation of the trained estimator
+    """
     evaluation = evaluator.evaluate(
         estimator, get_rows(X, test_indices), get_rows(y, test_indices)
     )
@@ -340,5 +589,6 @@ def _evaluate_model(
 
 
 def _split_data(data, train_ind, test_ind):
+    """Split data into train and test sets, independently of the type of `data`."""
     data_r, data_s = get_rows(data, train_ind), get_rows(data, test_ind)
     return data_r, data_s

@@ -11,9 +11,8 @@ import hypothesis as hyp
 import hypothesis.strategies as hst
 import numpy as np
 import pytest
-from cinspect.evaluators import Evaluator, ScoreEvaluator
-from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
-                                       bootstrap_model, crossval_model)
+import test_utils
+import testing_strategies
 from hypothesis import given
 from numpy.random.mtrand import RandomState
 from sklearn.base import BaseEstimator
@@ -22,8 +21,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection._split import LeaveOneOut, TimeSeriesSplit
 from sklearn.utils.validation import check_random_state
 
-import test_utils
-import testing_strategies
+from cinspect.evaluators import Evaluator, ScoreEvaluator
+from cinspect.model_evaluation import (_bootcross_split, bootcross_model,
+                                       bootstrap_model, crossval_model)
 
 logger = logging.getLogger()
 
@@ -506,7 +506,7 @@ def _test_invariance_to_n_jobs(fn, n_jobs=-1, *args, **kwargs):
 @hyp.settings(deadline=None)
 @given(data=_default_crossval_data_strategy(n_jobs=hst.sampled_from([2])))
 def test_crossval_parallelism(data):
-    """Tests that n_jobs doesn't affect."""
+    """Tests that n_jobs doesn't affect crossval_model."""
     try:
         _test_invariance_to_n_jobs(
             crossval_model,

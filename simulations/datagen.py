@@ -2,8 +2,8 @@
 # Licensed under the Apache 2.0 License.
 """Data generation classed for causal simulations."""
 
-import numpy as np
 import networkx as nx
+import numpy as np
 from scipy.special import expit
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.utils import check_random_state
@@ -16,7 +16,17 @@ def generate_sythetic_approximation(X: np.ndarray) -> np.ndarray:
     This is a quick hack, to generate data with at least some properties of the original.
     The covariance matrix is used to capture all the relationships between variables,
     regardless of whether they are continuous or categorical.
-    """
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data
+
+    Returns
+    -------
+    np.ndarray
+        Approximated data, with same shape as X
+    """    
     c = X.T @ X
     Xs = np.random.multivariate_normal(X.mean(axis=0), c, size=len(X))
     for col in range(X.shape[1]):
@@ -27,34 +37,34 @@ def generate_sythetic_approximation(X: np.ndarray) -> np.ndarray:
 
 
 class DGPGraph:
-    """A high level Interface for building Bayesian network data generating processes.
+    """A high level interface for building Bayesian network data generating processes.
 
     Example
     -------
-    ```
-    alpha = 0.3
-    n_x = 30
-    support_size = 5
-    coefs_T = np.zeros(n_x)
-    coefs_T[0:support_size] = np.random.normal(1, 1, size=support_size)
+    .. code-block:: python
 
-    coefs_Y = np.zeros(n_x)
-    coefs_Y[0:support_size] = np.random.uniform(0, 1, size=support_size)
+        alpha = 0.3
+        n_x = 30
+        support_size = 5
+        coefs_T = np.zeros(n_x)
+        coefs_T[0:support_size] = np.random.normal(1, 1, size=support_size)
 
-    def fX(n):
-        return np.random.normal(0, 1, size=(n, n_x))
+        coefs_Y = np.zeros(n_x)
+        coefs_Y[0:support_size] = np.random.uniform(0, 1, size=support_size)
 
-    def fT(X, n):
-        return X @ coefs_T + np.random.uniform(-1, 1, size=n)
+        def fX(n):
+            return np.random.normal(0, 1, size=(n, n_x))
 
-    def fY(X, T, n):
-        return alpha * T + X @ coefs_Y + np.random.uniform(-1, 1, size=n)
+        def fT(X, n):
+            return X @ coefs_T + np.random.uniform(-1, 1, size=n)
 
-    dgp = DGPGraph()
-    dgp.add_node("X", fX)
-    dgp.add_node("T", fT, parents=["X"])
-    dgp.add_node("Y", fY, parents=["X", "T"])
-    ```
+        def fY(X, T, n):
+            return alpha * T + X @ coefs_Y + np.random.uniform(-1, 1, size=n)
+
+        dgp = DGPGraph()
+        dgp.add_node("X", fX)
+        dgp.add_node("T", fT, parents=["X"])
+        dgp.add_node("Y", fY, parents=["X", "T"])
     """
 
     # TODO add some tracking to keep track of shape of variables & warn if problems arise
@@ -77,10 +87,10 @@ class DGPGraph:
         sample_func: function(*tensors) -> np.ndarray
             The sampling function for pyro.sample
 
-        parents: (optional) [str]
+        parents: [str], optional
             A list of the parents of this node. If None, node must be a root node.
 
-        standardise: (optional) bool
+        standardise: bool, optional
             Should the value of this node be automatically scaled & centered. Default False.
 
         """
@@ -94,11 +104,28 @@ class DGPGraph:
         self.shapes = self._check_func_returns()
 
     def get_function(self, node):
-        """Return the function for generating data for a node given its parents."""
+        """Return the function for generating data for a node given its parents.
+        
+        Returns
+        -------
+        function
+            The function for generating data for a node given its parents.
+        """
         return self.nodes[node][0]
 
     def get_parents(self, node):
-        """Return the list of parents for the given node or an empty list if there are none."""
+        """Return the list of parents for the given node or an empty list if there are none.
+        
+        Parameters
+        ----------
+        node: str
+            The name of the node
+        
+        Returns
+        -------
+        list
+            The list of parents for the given node or an empty list if there are none.
+        """
         if node in self.parents:
             return self.parents[node]
         return []
@@ -147,7 +174,10 @@ class DGPGraph:
         return v * value
 
     def draw_graph(self):
-        """Draw the DAG for the data generating process."""
+        """Draw the DAG for the data generating process.
+        
+        Uses networkx.
+        """
         nx.draw(self.graph, with_labels=True)
 
     def sample(self, n, interventions=None):
@@ -184,7 +214,26 @@ class DGPGraph:
         return values
 
     def ate(self, n, treatment_node, outcome_node, treatment_val=1, control_val=0):
-        """Compute the estimated Average Treatment Effect based on a sample of size n."""
+        """Compute the estimated Average Treatment Effect based on a sample of size n.
+        
+        Parameters
+        ----------
+        n: int
+            The number of samples to draw for the estimate
+        treatment_node: str
+            The name of the treatment node
+        outcome_node: str
+            The name of the outcome node
+        treatment_val: float, optional
+            The value of the treatment to use for the intervention. Default 1.
+        control_val: float, optional
+            The value of the control to use for the intervention. Default 0.
+        
+        Returns
+        -------
+        ate: float
+            The estimated Average Treatment Effect
+        """
         s1 = self.sample(n, interventions={treatment_node: treatment_val})
         s0 = self.sample(n, interventions={treatment_node: control_val})
         ate = s1[outcome_node].mean() - s0[outcome_node].mean()
@@ -200,8 +249,39 @@ class DGPGraph:
         condition_values,
         treatment_val=1,
         control_val=0,
-    ):
-        """Compute the estimated Conditional Average Treatment Effect from a sample size n."""
+    ) -> np.ndarray:
+        """Compute the estimated Conditional Average Treatment Effect from a sample size n.
+        
+        Multiple condition values can be passed and the CATE will be computed for each.
+
+        Parameters
+        ----------
+        n: int
+            The number of samples to draw for the estimate
+        treatment_node: str
+            The name of the treatment node
+        outcome_node: str
+            The name of the outcome node
+        condition_node: str
+            The name of the node to condition on
+        condition_values: list
+            The values of the condition node to condition on (one at a time)
+        treatment_val: float, optional
+            The value of the treatment to use for the intervention. Default 1.
+        control_val=0: float, optional
+            The value of the control to use for the intervention. Default 0.
+
+        Returns
+        -------
+        cate: :class:`np.ndarray`
+            The estimated Conditional Average Treatment Effect for each condition value.
+            Shape (len(condition_values),)
+
+        Raises
+        ------
+        NotImplementedError
+            If the condition node is not a root node or has dimensionality > 1.
+        """
         condition_shape = self.shapes[condition_node]
         if len(condition_shape) > 1:
             raise NotImplementedError(
@@ -235,8 +315,9 @@ def simple_triangle(
     n_x=30,
     support_size=5,
     random_state=None
-):
-    """Make a simple triangle model.
+) -> DGPGraph:
+    """
+    Make a simple triangle model.
 
     This is just a simple "triangle" model with linear relationships.
     X: confounding factors
@@ -245,7 +326,26 @@ def simple_triangle(
 
     Casual relationships are X->T, X->Y, T->Y.
 
-    """
+    Confounders are iid standard normal, unlike in :meth:`collinear_triangle`.
+
+    Parameters
+    ----------
+    alpha : float
+        Coefficient for the true causal effect of T on Y
+    binary_treatment : bool, optional
+        Whether the treatment is binary, by default False
+    n_x : int, optional
+        The number of confounding factors, by default 30
+    support_size : int, optional
+        The number of confounding factors that have non-zero X->T and X->Y coefficients, by default 5
+    random_state : random state | seed, optional
+        Random state, by default None
+
+    Returns
+    -------
+    DGPGraph
+        The generated graph
+    """    
     rng = check_random_state(random_state)
     coefs_T = np.zeros(n_x)
     coefs_T[0:support_size] = rng.normal(1, 1, size=support_size)
@@ -279,7 +379,8 @@ def collinear_confounders(
     latent_dim=5,
     random_state=None
 ):
-    """Make a triangle model with many collinear confounding variables.
+    """
+    Make a triangle model with many collinear confounding variables.
 
     This is just a simple "triangle" model with linear relationships.
     X: confounding factors
@@ -288,6 +389,23 @@ def collinear_confounders(
 
     Casual relationships are X->T, X->Y, T->Y.
 
+    Parameters
+    ----------
+    true_ate : float
+        The true causal effect of T on Y
+    binary_treatment : bool, optional
+        Whether the treatment is binary, by default False
+    confounder_dim : int, optional
+        The number of confounding factors, by default 200
+    latent_dim : int, optional
+        The number of latent dimensions for the confounders, by default 5
+    random_state : random state | seed, optional
+        Random state, by default None
+
+    Returns
+    -------
+    DGPGraph
+        The generated graph
     """
     rng = check_random_state(random_state)
     # Confounder latent distribution

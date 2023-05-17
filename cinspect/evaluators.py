@@ -1,6 +1,9 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Result evaluator classes."""
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+from __future__ import annotations
 
 import functools
 import logging
@@ -17,6 +20,7 @@ import pandas as pd
 from scipy.stats.mstats import mquantiles
 from sklearn.base import clone
 from sklearn.metrics import get_scorer
+from sklearn.utils import Bunch
 
 from cinspect import dependence, importance
 from cinspect.utils import get_column
@@ -26,9 +30,9 @@ LOG = logging.getLogger(__name__)
 # TODO sphinx documentation of custom types/type aliases
 Estimator = TypeVar("Estimator")  # intention is an sklearn estimator
 
-# random states as per sklearn
 # https://scikit-learn.org/dev/glossary.html#term-random_state
 # TODO sphinx documentation
+"""Type for random state, as per sklearn."""
 RandomStateType = Optional[Union[int, np.random.RandomState]]
 
 
@@ -36,7 +40,7 @@ class Evaluator:
     """Abstract class for Evaluators to inherit from.
 
     Each subclass should have an associated Evaluation type.
-    This should be a monoid, where :method:`Evaluator.aggregate` is the monoid operation.
+    This should be a monoid, where :meth:`Evaluator.aggregate` is the monoid operation.
 
     Internal state should be this Evaluation; should be initialised with the Monoidal identity
 
@@ -60,18 +64,14 @@ class Evaluator:
 
         Parameters
         ----------
-         Optional[Union[int, np.random.RandomState]], optional
-            Random state, by default RandomStateType
-
-        Parameters
-        ----------
         estimator : Estimator
             Estimator to evaluate
         X : npt.ArrayLike
             Features used for preparation (sub-class dependent semantics).
             Shape (n_features, n_rows)
         y : Optional[npt.ArrayLike], optional
-            Optional targets used for preparation, of shape (n_samples, n_targets), by default None.
+            Optional targets used for preparation, of shape `(n_samples, n_targets)`,
+            by default None.
         random_state : RandomStateType, optional
             Random state, by default None
         """
@@ -93,9 +93,9 @@ class Evaluator:
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
+            Features, of shape `(n_samples, n_features)`
         y : Optional[npt.ArrayLike], optional
-            Optional targets, of shape (n_samples, n_targets), by default None
+            Optional targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -112,13 +112,24 @@ class Evaluator:
         and is crucial for parallelisation.
 
         Evaluation should be a monoid with respect to this operation for sane behaviour:
-          - identity:
-            - aggregate([]) == unit
-            - aggregate( [unit] + evals ) == aggregate(evals) == aggregate(evals + [unit])
-          - associative:
-            - aggregate(aggregate([a]), aggregate([b,c])
-              == aggregate([a,b,c])
-              == aggregate(aggregate([a,b ]), aggregate([c])
+
+        * identity:
+            * aggregate([]) == unit
+            * and::
+
+                aggregate( [unit] + evals )
+
+                == aggregate(evals)
+
+                == aggregate(evals + [unit])
+        * associativity: ::
+
+            aggregate(aggregate([a]), aggregate([b,c])
+
+            == aggregate([a,b,c])
+
+            == aggregate(aggregate([a,b]), aggregate([c])
+
 
         TODO examples
         e.g. Evaluation could be a list of statistics, could be (mean, count) of a statistic,
@@ -140,7 +151,7 @@ class Evaluator:
     def set_evaluation(self, evaluation: Evaluation) -> None:
         """Setter; sets this object's evaluation.
 
-        Subclasses should ensure that this and self.prepare(..)
+        Subclasses should ensure that this and :meth:`self.prepare`
         are the only ways to modify internal state.
 
 
@@ -171,7 +182,12 @@ class Evaluator:
         Returns
         -------
         Any
-            _description_
+            The stored Evaluation (subclasses may override this)
+
+        Raises
+        ------
+        Exception
+            If no evaluation is available
         """
         if evaluation is None and hasattr(self, "evaluation"):
             evaluation = self.evaluation
@@ -192,7 +208,7 @@ class ScoreEvaluator(Evaluator):
     scorers: list[str|Scorer]
         List of scorers/scorer names to compute.
         Names -> scorer correspondence dictated by `sklearn.metrics.get_scorer`
-    groupby: (optional) str or list[str]
+    groupby:  str or list[str], optional
         List or string indicating that scores should be calculated
         separately within groups defined by this/these variables.
         TODO: this is currently implemented implicitly using pandas
@@ -234,9 +250,9 @@ class ScoreEvaluator(Evaluator):
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
-        y : Optional[npt.ArrayLike], optional
-            Optional targets, of shape (n_samples, n_targets), by default None
+            Features, of shape `(n_samples, n_features)`
+        y : npt.ArrayLike, optional
+            Optional targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -270,7 +286,7 @@ class ScoreEvaluator(Evaluator):
 
         Parameters
         ----------
-        evaluation : Optional[ScoreEvaluation], by default None
+        evaluation : ScoreEvaluation, optional
             ScoreEvaluation dictionary to convert. Otherwise extract this object's stored scores.
 
         Returns
@@ -296,8 +312,6 @@ class BinaryTreatmentEffect(Evaluator):
         Value of treatment variable when "treated" , by default 1
     control_val: Any, optional
         Value of treatment variable when "untreated", by default 0
-    evaluate_mode: str, optional
-        Evaluation mode; "train"/"test"/"all", by default "all"
     """
 
     # type of the Evaluation produced
@@ -357,9 +371,9 @@ class BinaryTreatmentEffect(Evaluator):
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
+            Features, of shape `(n_samples, n_features)`
         y : npt.ArrayLike, optional
-            Unused targets, of shape (n_samples, n_targets), by default None
+            Unused targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -453,16 +467,16 @@ class PartialDependanceEvaluator(Evaluator):
 
         Parameters
         ----------
-        feature_grids: (optional) Dict[str, npt.ArrayLike], by default None
+        feature_grids: Dict[str, npt.ArrayLike], optional
             Map from feature_name to grid of values for that feature.
             If set, dependence will only be computed for specified features.
 
         conditional_filter:
-        (optional) Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]]
+        Callable[[npt.ArrayLike, npt.ArrayLike], Tuple[npt.ArrayLike, npt.ArrayLike]], optional
             Used to filter X and y before computing dependence
             Takes X,y, produces new X,y
             by default None: no filter
-        end_transform_indx: (optional) int
+        end_transform_indx: int, optional
             compute dependence with respect to this point of the pipeline onwards.
             TODO dive deep, write example
         """
@@ -525,9 +539,9 @@ class PartialDependanceEvaluator(Evaluator):
         estimator : Estimator
             An sklearn estimator
         X : npt.ArrayLike
-            Features, of shape (n_samples, n_features)
-        y : Optional[npt.ArrayLike]
-            targets, of shape (n_samples, n_targets), by default None
+            Features, of shape `(n_samples, n_features)`
+        y : npt.ArrayLike, optional
+            targets, of shape `(n_samples, n_targets)`, by default None
 
         Returns
         -------
@@ -598,7 +612,7 @@ class PartialDependanceEvaluator(Evaluator):
             _description_, by default "black"
         color_samples: str, optional
             _description_, by default "grey"
-        pd_alpha: _type_, optional
+        pd_alpha: float, optional
             _description_, by default None
         ci_bounds: tuple, optional
             _description_, by default (0.025, 0.975)
@@ -675,6 +689,8 @@ class _Dependance:
 class PermutationImportanceEvaluator(Evaluator):
     """Permutation Importance Evaluator.
 
+    TODO Evaluation could/should be a bunch of lists, rather than a list of bunches
+
     Parameters
     ----------
     n_repeats: int
@@ -684,20 +700,20 @@ class PermutationImportanceEvaluator(Evaluator):
     n_top: int
         The number of features to show on the plot
 
-    features: (optional) [int] or [str] or {str:[int]}
+    features: [int] or [str] or {str:[int]}, optional
         A list of features, either indices or column names for which importance
         should be computed. Defaults to computing importance for all features.
 
-    end_transform_indx: (optional) int
+    end_transform_indx: int, optional
         Set if you which to compute feature importance with respect to features
         after this point in the pipeline. Defaults to computing importance with
         respect to the whole pipeline.
 
-    grouped: bool (default=False)
+    grouped: bool, optional
         Should features be permuted together as groups. If True, features must
         be passed as a dictionary.
 
-    conditional_filter: (optional) callable
+    conditional_filter: callable, optional
         Used to filter X and y before computing importance
     """
 
@@ -734,10 +750,31 @@ class PermutationImportanceEvaluator(Evaluator):
         self.scorer = scorer
         self.conditional_filter = conditional_filter
 
-    def prepare(self, estimator, X, y=None, random_state=None):
-        """Prepare the evaluator with model and data information.
+    def prepare(self,
+                estimator: Estimator,
+                X : npt.ArrayLike,
+                y : Optional[npt.ArrayLike] = None,
+                random_state : RandomStateType = None):
+        """
+        Prepare the evaluator with model and data information. Mutates the Evaluators state.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator : Estimator
+            The estimator that will be evaluated
+        X : npt.ArrayLike
+            Training feature data
+        y : npt.ArrayLike, optional
+            Training target data, by default None
+        random_state : RandomStateType, optional
+            Random state, by default None
+
+        Raises
+        ------
+        ValueError
+            If column grouping is requested but grouping types are heterogeneous
         """
         if self.end_transform_indx is not None:
             transformer = clone(estimator[0 : self.end_transform_indx])
@@ -774,10 +811,28 @@ class PermutationImportanceEvaluator(Evaluator):
         self.n_original_columns = X.shape[1]
         self.random_state = random_state
 
-    def evaluate(self, estimator, X, y) -> List[np.ndarray]:
+    def evaluate(self,
+                 estimator : Estimator,
+                 X: npt.ArrayLike,
+                 y: npt.ArrayLike) -> List[Bunch]:
         """Evaluate the fitted estimator with input data.
 
         This is called by a model evaluation function in model_evaluation.
+
+        Parameters
+        ----------
+        estimator: Estimator
+            The fitted estimator to evaluate
+        X: npt.ArrayLike
+            Feature data
+        y: npt.ArrayLike
+            Target data
+
+        Returns
+        -------
+        List[:class:`~sklearn.utils.Bunch`]
+            A singleton list containing a Bunch that holds the permutation
+            importance for each feature.
         """
         if self.end_transform_indx is not None:
             transformer = estimator[0 : self.end_transform_indx]
@@ -823,8 +878,19 @@ class PermutationImportanceEvaluator(Evaluator):
 
         return [imprt.importances]
 
-    def aggregate(self, evaluations: Sequence[List[np.ndarray]]) -> List[np.ndarray]:
-        """Concatenate sequence of evaluations."""
+    def aggregate(self, evaluations: Sequence[List[Bunch]]) -> List[Bunch]:
+        """Concatenate sequence of evaluations.
+
+        Parameters
+        ----------
+        evaluations: Sequence[List[:class:`~sklearn.utils.Bunch`]]
+            Sequence of evaluations to concatenate
+
+        Returns
+        -------
+        List[:class:`~sklearn.utils.Bunch`]
+            Concatenated evaluations
+        """
         return _flatten(evaluations)
 
     def get_results(self, evaluation=None, ntop=10, name=None) -> mpl.figure.Figure:
@@ -860,6 +926,21 @@ def _get_column_indices_and_names(X, columns=None):
     ----------
     X: numpy array or pd.DataFrame
     columns: iterable of strings or ints
+
+
+    Returns
+    -------
+    indices: list of ints
+    names: list of strings
+    passed_by_name: bool
+        True if columns were specified by name, False if by index
+
+    Raises
+    ------
+    KeyError
+        If a specified column name is not in the data
+    ValueError
+        If columns are specified by name but the data does not have column names
     """
     # columns not specified - return all
     if columns is None:

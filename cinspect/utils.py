@@ -1,10 +1,11 @@
 # Copyright (c) Gradient Institute. All rights reserved.
 # Licensed under the Apache 2.0 License.
 """Common handy functions."""
+from functools import singledispatch
+
 import numpy as np
 import pandas as pd
 from multimethod import multimethod
-from functools import singledispatch
 
 
 @multimethod

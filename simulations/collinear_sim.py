@@ -7,17 +7,16 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
-from cinspect.dimension import effective_rank
-from cinspect.estimators import BinaryTreatmentRegressor
-from cinspect.evaluators import BinaryTreatmentEffect
-from cinspect.model_evaluation import bootstrap_model, crossval_model
 from numpy.typing import ArrayLike
 from sklearn.base import clone
-
 # from sklearn.base import clone # required if we add *best* ridge regressor back in
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.model_selection import GridSearchCV, RepeatedKFold, ShuffleSplit
 
+from cinspect.dimension import effective_rank
+from cinspect.estimators import BinaryTreatmentRegressor
+from cinspect.evaluators import BinaryTreatmentEffect
+from cinspect.model_evaluation import bootstrap_model, crossval_model
 from simulations.datagen import collinear_confounders
 
 # Logging
@@ -29,12 +28,12 @@ logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 TRUE_ATE = 0.3
 
 
-def make_data() -> Tuple[ArrayLike, ArrayLike]:
+def make_data() -> Tuple[pd.DataFrame, np.ndarray]:
     """Construct collinear simulation data.
 
     Returns
     -------
-    (X, y) : Tuple[ArrayLike, ArrayLike]
+    (X, y) : Tuple[pd.DataFrame, np.ndarray]
         (features, target)
     """
     n = 500
@@ -56,7 +55,7 @@ def load_synthetic_data():
 
     Returns
     -------
-    (X, y) : Tuple[ArrayLike, ArrayLike]
+    (X, y) : Tuple[pd.DataFrame, np.ndarray]
         (features, target)
     """
     data_file = "../data/synthetic_data.csv"

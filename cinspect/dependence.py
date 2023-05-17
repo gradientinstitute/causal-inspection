@@ -2,11 +2,17 @@
 # Licensed under the Apache 2.0 License.
 """Partial dependence and individual conditional expectation functions."""
 
-import numbers
-from typing import List, Optional, Tuple, Union
+# defers evaluation of annotations so sphinx can parse type aliases rather than
+# their expanded forms
+from __future__ import annotations
 
+import numbers
+from typing import List, Optional, Sequence, Tuple, Type, Union
+
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from scipy.stats.mstats import mquantiles
 
@@ -14,9 +20,11 @@ from scipy.stats.mstats import mquantiles
 IMAGE_TYPE = "png"
 
 
-def numpy2d_to_dataframe_with_types(X, columns, types):
+def numpy2d_to_dataframe_with_types(X : np.ndarray,
+                                    columns : List[str],
+                                    types : List[Type]) -> pd.DataFrame:
     """
-    Create a new dataframe with the specified column names and column types.
+     Create a new dataframe with the specified column names and column types.
 
     Example
     X = pd.DataFrame(...)
@@ -26,6 +34,24 @@ def numpy2d_to_dataframe_with_types(X, columns, types):
 
     Xnew = numpy2d_to_dataframe_with_types(values,df_columns,df_types)
 
+    Parameters
+    ----------
+    X : np.ndarray
+        Data to convert to dataframe
+    columns : List[str]
+        Column names
+    types : List[Type]
+        Column types
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with specified data, column names and types
+
+    Raises
+    ------
+    AssertionError
+        If the number of columns, column names and column types do not match
     """
     nxcols, ncols, ntypes = X.shape[1], len(columns), len(types)
     assert nxcols == ncols == ntypes, (
@@ -61,7 +87,7 @@ def individual_conditional_expectation(
         compute the curve. if an int is passed uses a linear grid of length
         grid_values from the minimum to the maximum.
 
-    predict_method: callable method on model (optional)
+    predict_method: callable method on model, optional
         The method to call to predict.
         Defaults to predict_proba for classifiers and predict for regressors.
 
@@ -71,6 +97,13 @@ def individual_conditional_expectation(
     predictions: 2d ndarray
         the model predictions, where the specified feature is set to the
         corresponding value in grid_values
+
+    Raises
+    ------
+    ValueError
+        If predict_method is None and the model does not have a predict/predict_proba method
+    ValueError
+        If feature is not an integer and X is not a pandas DataFrame
     """
     if predict_method is None:
         if hasattr(model, "predict_proba"):
@@ -85,7 +118,6 @@ def individual_conditional_expectation(
                 "model does not support `predict_proba` or `predict` and no "
                 "alternate method specified."
             )
-
     input_df = False  # track if the predictor is expecting a dataframe
     if hasattr(X, "columns"):  # pandas DataFrame
         df_columns = X.columns
@@ -129,8 +161,8 @@ def construct_grid(
     -------
     grid, grid_counts: Tuple[np.ndarray, Optional[np.ndarray]]
         Constructed grid, and its counts of unique elements.
-        Returned grid_counts is not None iff
-            grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
+        Returned grid_counts is not None if and only if
+        grid_values=="unique" or ("auto" and n_unique(v)>auto_threshold).
 
     Raises
     ------
@@ -192,33 +224,37 @@ def construct_grid(
 
 
 def plot_partial_dependence_density(
-    ax, grid, density, feature_name, categorical, color="black", alpha=0.5
+    ax : plt.Axes,
+    grid : Sequence[float],
+    density : npt.ArrayLike,
+    feature_name : str,
+    categorical : bool,
+    color : str = "black",
+    alpha : float = 0.5,
 ) -> Tuple[np.ndarray, Union[np.ndarray, List[np.ndarray]]]:
     """
     Plot partial dependency on axes ax.
 
-    TODO next
-
     Parameters
     ----------
-    ax : _type_
-        _description_
-    grid : _type_
-        _description_
-    density : _type_
-        _description_
-    feature_name : _type_
-        _description_
-    categorical : _type_
-        _description_
+    ax : plt.Axes
+        Axes to plot on
+    grid : Sequence[float]
+        The grid values
+    density : npt.ArrayLike
+        The density values
+    feature_name : str
+        The name of the feature
+    categorical : bool
+        Whether the feature is categorical
     color : str, optional
-        _description_, by default "black"
+        The color of the plot bins, by default "black"
     alpha : float, optional
-        _description_, by default 0.5
+        The opacity of the plot bins, by default 0.5
 
     Returns
     -------
-    bins: : np.ndarray
+    bins: np.ndarray
         The edges of the bins. Length nbins + 1 (nbins left edges and right edge of last bin).
         Always a single array even when multiple data sets are passed in.
 
@@ -232,7 +268,7 @@ def plot_partial_dependence_density(
         even if no weighting or normalization is used.
 
     """
-    # plot the distribution for of the variable on the second axis
+    # plot the distribution of the variable on the second axis
     if categorical:
         x = np.arange(len(grid))
         ax.bar(x, density, color=color, alpha=alpha)
@@ -260,47 +296,63 @@ def plot_partial_dependence_density(
 
 
 def plot_partial_dependence_with_uncertainty(
-    grid,
-    predictions,
-    feature_name,
-    categorical=True,
-    density=None,
-    name=None,
-    mode="multiple-pd-lines",
-    ax=None,
-    color="black",
-    color_samples="grey",
-    alpha=0.3,
-    label=None,
-    ci_bounds=(0.025, 0.975),
-):
-    """Plot partial dependence plot with uncertainty estimates.
-
-    TODO: proper docstring.
+    grid : npt.ArrayLike,
+    predictions : List[np.ndarray],
+    feature_name : str,
+    categorical : bool = True,
+    density : npt.ArrayLike = None,
+    name : str = None,
+    mode : str = "multiple-pd-lines",
+    ax : plt.Axes = None,
+    color : str = "black",
+    color_samples : str = "grey",
+    alpha : float = 0.5,
+    label : str = None,
+    ci_bounds : Tuple[float] = (0.025, 0.975)
+) -> Tuple[mpl.figure.Figure, dict]:
+    """
+    Plot partial dependence plot with uncertainty estimates.
 
     Parameters
     ----------
-    grid: np.array
+    grid : npt.ArrayLike
         Array of values of the feature for which the pdp values have been
         computed
-    predictions list[np.array]
-        List of ICE predictions, one from each fold. Each array is shaped
-        (num_samples, size_of_grid)
-    feature_name: str
-        The name of the feature
-    alpha: float
-        The alpha of the confidence region or multiple PD lines.
-    mode: str
-        One of -
-            multiple-pd-lines - a PD line for each sample of data
-            derivative - a derivative PD plot with mean and confidence
-                intervals.
-            interval - a PD plot with
-            ice-mu-sd
+    predictions : List[np.ndarray]
+        List of ICE predictions, one from each fold.
+        Each array is shaped (num_samples, size_of_grid)
+    feature_name : str
+        The feature we are plotting the partial dependency on
+    categorical : bool, optional
+        Whether the feature is categorical, by default True
+    density : npt.ArrayLike, optional
+        The density values, by default None
+    name : str, optional
+        The dependent variable's name (used only for labels), by default None
+    mode : str, optional
+        One of:
+            * multiple-pd-lines - a PD line for each sample of data
+            * derivative - a derivative PD plot with mean and confidence intervals.
+            * interval - a PD plot with confidence intervals
+            * ice-mu-sd - a PD plot with ICE mean and standard deviation
+        By default "multiple-pd-lines"
+    ax : plt.Axes, optional
+        Axes to plot on, by default None.
+        Should not be passed if densiy is provided.
+    color : str, optional
+        Colour of the PD plot, by default "black"
+    color_samples : str, optional
+        Secondary colour, by default "grey"
+    alpha : float, optional
+        The alpha of the confidence region or multiple PD lines, by default 0.5
+    label : str, optional
+        The label for the PD plot, by default None
+    ci_bounds : Tuple[float], optional
+        The lower and upper bounds of the confidence interval, by default (0.025, 0.975)
 
     Returns
     -------
-    fig: Figure
+    fig: :class:`mpl.figure.Figure`
         A figure of the partial dependence results
     res: dict
         A results dictionary, with keys depending on the mode:
@@ -308,6 +360,12 @@ def plot_partial_dependence_with_uncertainty(
             derivative - "mean" and "lower" and "upper" confidence intervals
             interval - "mean" and "lower" and "upper" confidence intervals
             ice-mu-sd - "mean" and the "std" of the ICE plots
+    Raises
+    ------
+    ValueError
+        If ax is provided and density is not None
+    ValueError
+        If mode is not one of "multiple-pd-lines", "derivative", "interval", "ice-mu-sd".
     """
     res = {}
     fig = None
